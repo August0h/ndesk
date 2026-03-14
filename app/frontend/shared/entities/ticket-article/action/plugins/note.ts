@@ -9,7 +9,7 @@ const actionPlugin: TicketArticleActionPlugin = {
     const isInternal = !!config.ui_ticket_zoom_article_note_new_internal
 
     const type: TicketArticleType = {
-      apps: ['mobile', 'desktop'],
+      apps: [],
       value: 'note',
       label: __('Note'),
       buttonLabel: isInternal ? __('Add internal note') : __('Add note'),

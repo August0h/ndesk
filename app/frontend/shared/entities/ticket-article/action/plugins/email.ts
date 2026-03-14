@@ -63,7 +63,7 @@ const actionPlugin: TicketArticleActionPlugin = {
     if (isEmail || isPhone) {
       actions.push(
         {
-          apps: ['mobile', 'desktop'],
+          apps: [],
           name: 'email-reply',
           view: { agent: ['change'] },
           label: __('Reply'),
@@ -72,7 +72,7 @@ const actionPlugin: TicketArticleActionPlugin = {
           perform: (t, a, o) => replyToEmail(t, a, o, config),
         },
         {
-          apps: ['mobile', 'desktop'],
+          apps: [],
           name: 'email-forward',
           view: { agent: ['change'] },
           label: __('Forward'),
@@ -84,7 +84,7 @@ const actionPlugin: TicketArticleActionPlugin = {
 
     if (isEmail && canReplyAll(article)) {
       actions.push({
-        apps: ['mobile', 'desktop'],
+        apps: [],
         name: 'email-reply-all',
         view: { agent: ['change'] },
         label: __('Reply all'),
@@ -144,7 +144,7 @@ const actionPlugin: TicketArticleActionPlugin = {
       value: 'email',
       label: __('Email'),
       buttonLabel: __('Add email'),
-      apps: ['mobile', 'desktop'],
+      apps: [],
       icon: 'mail',
       view: { agent: ['change'] },
       fields,

@@ -188,7 +188,31 @@ class TicketArticlesController < ApplicationController
     # preview calendar attachments
     return render_calendar_preview if params[:view] == 'preview' && params[:type] == 'calendar'
 
-    content = download_file.content(params[:view])
+    content    = download_file.content(params[:view])
+    total_size = content.bytesize
+
+    response.headers['Accept-Ranges'] = 'bytes'
+
+    if request.headers['Range'].present?
+      range_header = request.headers['Range']
+
+      if range_header =~ /bytes=(\d*)-(\d*)/
+        range_start = $1.empty? ? 0 : $1.to_i
+        range_end   = $2.empty? ? total_size - 1 : $2.to_i
+        range_end   = [range_end, total_size - 1].min
+
+        response.headers['Content-Range'] = "bytes #{range_start}-#{range_end}/#{total_size}"
+        response.headers['Content-Disposition'] = "#{download_file.disposition}; filename=\"#{download_file.filename}\""
+
+        render(
+          body:         content.byteslice(range_start, range_end - range_start + 1),
+          content_type: download_file.content_type,
+          status:       :partial_content
+        )
+        return
+      end
+    end
+
     send_data(
       content,
       filename:    download_file.filename,

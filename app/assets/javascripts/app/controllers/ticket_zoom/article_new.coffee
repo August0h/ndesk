@@ -32,6 +32,8 @@ class App.TicketZoomArticleNew extends App.Controller
     'blur .js-textarea':             'blurTextarea'
     'click .js-active-toggle':       'toggleButton'
     'click .js-active-toggle-type':  'toggleTypeButton'
+    'click .js-startRecord':         'startAudioRecord'
+    'click .js-stopRecord':          'stopAudioRecord'
 
   constructor: ->
     super
@@ -158,11 +160,8 @@ class App.TicketZoomArticleNew extends App.Controller
     articleTypeExists = _.some(@articleTypes, (articleType) -> articleType?.name is type)
     return type if articleTypeExists
 
-    if @ticket?.currentView() is 'customer'
-      fallback = _.find(@articleTypes, (articleType) -> articleType?.name?)
-      return fallback?.name || 'note'
-
-    type
+    fallback = _.find(@articleTypes, (articleType) -> articleType?.name?)
+    return fallback?.name || type
 
   placeCaretAtEnd: (el) ->
     el.focus()
@@ -507,9 +506,10 @@ class App.TicketZoomArticleNew extends App.Controller
     @bodyEnsureNoCaption = undefined
     @bodyAllowNoCaption  = undefined
 
+    @$('.form-group').addClass('hide')
+    @$('.article-attachment, .attachments, .js-textSizeLimit').addClass('hide')
     for articleType in @articleTypes
       if articleType.name is type
-        @$('.form-group').addClass('hide')
         for name in articleType.attributes
           @$("[name=#{name}]").closest('.form-group').removeClass('hide')
         @$('.article-attachment, .attachments, .js-textSizeLimit').addClass('hide')
@@ -803,6 +803,59 @@ class App.TicketZoomArticleNew extends App.Controller
     @el
       .find('input[name=shared_draft_id]')
       .val(options.shared_draft_id)
+
+  startAudioRecord: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    return if !navigator.mediaDevices?.getUserMedia
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then (stream) =>
+        @_audioStream  = stream
+        @_audioChunks  = []
+        mimeType = if MediaRecorder.isTypeSupported('audio/webm') then 'audio/webm' else 'audio/ogg'
+        @_audioRecorder = new MediaRecorder(stream, { mimeType: mimeType })
+        @_audioRecorder.ondataavailable = (e) =>
+          @_audioChunks.push(e.data) if e.data.size > 0
+        @_audioRecorder.onstop = =>
+          @_uploadAudioRecording(mimeType)
+        @_audioRecorder.start()
+        @_audioRecordSeconds = 0
+        @_audioRecordTimer = setInterval =>
+          @_audioRecordSeconds++
+          @$('.js-recordTime').text("#{@_audioRecordSeconds}s")
+        , 1000
+        @$('.js-startRecord').addClass('hide')
+        @$('.js-stopRecord').removeClass('hide')
+      .catch =>
+        App.Event.trigger('notify', [{ type: 'error', msg: App.i18n.translateInline('Microphone access denied') }])
+
+  stopAudioRecord: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    return if !@_audioRecorder
+    clearInterval(@_audioRecordTimer)
+    @_audioRecorder.stop()
+    @_audioStream.getTracks().forEach (track) -> track.stop()
+    @$('.js-stopRecord').addClass('hide')
+    @$('.js-startRecord').removeClass('hide')
+    @$('.js-recordTime').text('0s')
+
+  _uploadAudioRecording: (mimeType) =>
+    ext      = if mimeType is 'audio/webm' then 'webm' else 'ogg'
+    date     = new Date().toISOString().replace(/[:.]/g, '-')
+    filename = "audio-#{date}.#{ext}"
+    blob     = new Blob(@_audioChunks, { type: mimeType })
+    formData = new FormData()
+    formData.append('File', blob, filename)
+    xhr = new XMLHttpRequest()
+    xhr.open('POST', "#{App.Config.get('api_path')}/upload_caches/#{@form_id}")
+    xhr.setRequestHeader('X-CSRF-Token', App.Ajax.token())
+    xhr.onload = =>
+      return if xhr.status isnt 200
+      response = JSON.parse(xhr.responseText)
+      @attachments.push(response.data)
+      @renderAttachment(response.data)
+    xhr.send(formData)
 
   actions: ->
     actionConfig = App.Config.get('TicketZoomArticleAction')

@@ -2,6 +2,7 @@ class EmailReply extends App.Controller
   @action: (actions, ticket, article, ui) ->
     return actions if !ticket.editable()
     return actions if ticket.currentView() is 'customer'
+    return actions if ticket.currentView() is 'agent'
     group = ticket.group
     return actions if !group.email_address_id
 
@@ -302,6 +303,7 @@ class EmailReply extends App.Controller
 
   @articleTypes: (articleTypes, ticket, ui) ->
     return articleTypes if ticket.currentView() is 'customer'
+    return articleTypes if ticket.currentView() is 'agent'
     group = ticket.group
     return articleTypes if !group.email_address_id
 

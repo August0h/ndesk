@@ -3,13 +3,28 @@
     <%- @Icon('paperclip') %>
     <div class="attachments-title"><%- @attachments.length %> <%- @T('Attached Files') %></div>
     <% for attachment in @attachments: %>
-      <% if !@C('ui_ticket_zoom_attachments_preview'): %>
+      <% content_type = @ContentOrMimeType(attachment) %>
+      <% if @canPlayAudio(content_type): %>
+        <div class="attachment attachment--row js-audio-player" style="flex-direction:column;align-items:flex-start;gap:3px;padding:4px 0;">
+          <span class="attachment-name" style="font-size:11px;color:#aaa;"><%= attachment.filename %> (<%- @humanFileSize(attachment.size) %>)</span>
+          <div style="display:flex;align-items:center;gap:6px;width:100%;max-width:280px;">
+            <audio class="js-audio-el" preload="none" style="display:none;">
+              <source src="<%= attachment.url.replace('disposition=attachment','disposition=inline') %>" type="<%= content_type %>">
+            </audio>
+            <button type="button" class="js-audio-play" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;min-width:26px;background:#4a90d9;border:none;border-radius:50%;cursor:pointer;padding:0;">
+              <svg class="js-icon-play" width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
+              <svg class="js-icon-pause" width="10" height="10" viewBox="0 0 10 10" fill="white" style="display:none;"><rect x="2" y="1" width="2.5" height="8" rx="1"/><rect x="5.5" y="1" width="2.5" height="8" rx="1"/></svg>
+            </button>
+            <input type="range" class="js-audio-seek" min="0" value="0" step="0.1" style="flex:1;height:4px;cursor:pointer;accent-color:#4a90d9;">
+            <span class="js-audio-time" style="font-size:10px;color:#888;white-space:nowrap;min-width:32px;text-align:right;">0:00</span>
+          </div>
+        </div>
+      <% else if !@C('ui_ticket_zoom_attachments_preview'): %>
         <div class="attachment attachment--row">
           <a class="attachment-name u-highlight" href="<%= attachment.url %>" data-type="attachment" <% if @canDownload(content_type): %>download<% else: %>target="_blank"<% end %>><%= attachment.filename %></a>
           <div class="attachment-size"><%- @humanFileSize(attachment.size) %></div>
         </div>
       <% else: %>
-        <% content_type = @ContentOrMimeType(attachment) %>
         <a class="attachment attachment--preview <%- @ContentTypeIcon(content_type) if @ContentTypeIcon(content_type) %>" href="<%= attachment.url %>" data-type="attachment" data-preview-url="<%= attachment.preview_url %>" data-id="<%= attachment.id %>" <% if @canDownload(content_type): %> download<% else: %>target="_blank"<% end %>>
           <div class="attachment-icon js-preview">
           <% if attachment.preferences && content_type && @ContentTypeIcon(content_type): %>

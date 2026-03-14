@@ -270,6 +270,11 @@ App.ViewHelpers =
     return true if contentType.match(/image\/(png|jpg|jpeg|gif|webp)/i)
     false
 
+  canPlayAudio: (contentType) ->
+    return false if _.isEmpty(contentType)
+    return true if contentType.match(/audio\/(webm|ogg|mpeg|mp4|wav|aac|flac)/i)
+    false
+
   unique_avatar: (seed, text, size = 40) ->
     baseSize = 40
     width  = 300 * size/baseSize
