@@ -7,9 +7,9 @@ import { createTestArticleTypes, createTicket } from './utils.ts'
 
 describe('note type', () => {
   it.each([
-    ['ticket.agent', false, false],
-    ['ticket.agent', true, true],
-  ])('check article internal for "%s" when config is %s', (permission, config, internal) => {
+    ['ticket.agent', false],
+    ['ticket.agent', true],
+  ])('agent does not get note type when config is %s', (permission, config) => {
     mockPermissions([permission])
     const ticket = createTicket()
     mockApplicationConfig({
@@ -18,7 +18,7 @@ describe('note type', () => {
 
     const types = createTestArticleTypes(ticket)
 
-    expect(types).toContainEqual(expect.objectContaining({ value: 'note', internal }))
+    expect(types).not.toContainEqual(expect.objectContaining({ value: 'note' }))
   })
 
   it('customer does not get note type', () => {
