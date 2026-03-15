@@ -85,7 +85,9 @@ describe('ArticleBubbleActionList', () => {
     const wrapper = renderArticleBubbleActionList()
 
     expect(wrapper.queryByRole('menuitem', { name: 'Forward' })).not.toBeInTheDocument()
-    expect(wrapper.queryByRole('menuitem', { name: 'Download original email' })).not.toBeInTheDocument()
+    expect(
+      wrapper.queryByRole('menuitem', { name: 'Download original email' }),
+    ).not.toBeInTheDocument()
     expect(wrapper.queryByRole('menuitem', { name: 'Download raw email' })).not.toBeInTheDocument()
   })
 
@@ -102,7 +104,9 @@ describe('ArticleBubbleActionList', () => {
 
     expect(wrapper.queryByRole('menuitem', { name: 'Forward' })).not.toBeInTheDocument()
     expect(wrapper.queryByRole('menuitem', { name: 'Download raw email' })).not.toBeInTheDocument()
-    expect(wrapper.queryByRole('menuitem', { name: 'Download original email' })).not.toBeInTheDocument()
+    expect(
+      wrapper.queryByRole('menuitem', { name: 'Download original email' }),
+    ).not.toBeInTheDocument()
   })
 
   it('renders right-position actions with reversed order class', () => {

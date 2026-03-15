@@ -4,8 +4,6 @@ import { mockPermissions } from '#tests/support/mock-permissions.ts'
 
 import { createTestArticleTypes, createTicket } from './utils.ts'
 
-import type { AppSpecificTicketArticleType } from '../types.ts'
-
 describe('email type', () => {
   describe('type availability', () => {
     it('agent does not get email type', () => {
