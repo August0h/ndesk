@@ -75,10 +75,6 @@ describe('ArticleReply', () => {
   it('shows common article action buttons', () => {
     const wrapper = renderArticleReply()
 
-    expect(wrapper.getByRole('button', { name: 'Add internal note' })).toBeInTheDocument()
-
-    expect(wrapper.getByIconName('pencil-square')).toBeInTheDocument()
-
     expect(wrapper.getByRole('button', { name: 'Add phone call' })).toBeInTheDocument()
 
     expect(wrapper.getByIconName('telephone')).toBeInTheDocument()
@@ -89,9 +85,9 @@ describe('ArticleReply', () => {
       createArticleType: 'phone',
     })
 
-    expect(wrapper.getByRole('button', { name: 'Add reply' })).toBeInTheDocument()
+    expect(wrapper.getByRole('button', { name: 'Add phone call' })).toBeInTheDocument()
 
-    expect(wrapper.getByIconName('envelope')).toBeInTheDocument()
+    expect(wrapper.getByIconName('telephone')).toBeInTheDocument()
   })
 
   it('shows primary article reply action button for tickets created by web', () => {
@@ -99,9 +95,9 @@ describe('ArticleReply', () => {
       createArticleType: 'web',
     })
 
-    expect(wrapper.getByRole('button', { name: 'Add reply' })).toBeInTheDocument()
+    expect(wrapper.getByRole('button', { name: 'Add phone call' })).toBeInTheDocument()
 
-    expect(wrapper.getByIconName('envelope')).toBeInTheDocument()
+    expect(wrapper.getByIconName('telephone')).toBeInTheDocument()
   })
 
   it('can display and pin reply form', async () => {

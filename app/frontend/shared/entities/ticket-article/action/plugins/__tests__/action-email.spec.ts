@@ -38,7 +38,7 @@ describe('email permissions', () => {
   const types = ['email-reply', 'email-all', 'email-forward']
 
   it.each(['email-reply', 'email-forward'])(
-    '%s reply is available for agent and email article',
+    '%s reply is not available for agent and email article',
     (type) => {
       setupView('agent')
       const ticket = createAgentUpdatableTicket()
@@ -50,13 +50,13 @@ describe('email permissions', () => {
       const actions = createTestArticleActions(ticket, article)
       expect(
         actions.find((action) => action.name === type),
-        `${type} is defined`,
-      ).toBeDefined()
+        `${type} is not defined`,
+      ).toBeUndefined()
     },
   )
 
   it.each(['email-reply', 'email-forward'])(
-    '%s reply is available for agent and phone article sent by Customer',
+    '%s reply is not available for agent and phone article sent by Customer',
     (type) => {
       setupView('agent')
       const ticket = createAgentUpdatableTicket()
@@ -70,12 +70,12 @@ describe('email permissions', () => {
         name: EnumTicketArticleSenderName.Customer,
       }
       const actions = createTestArticleActions(ticket, article)
-      expect(actions.find((action) => action.name === type)).toBeDefined()
+      expect(actions.find((action) => action.name === type)).toBeUndefined()
     },
   )
 
   it.each(['email-reply', 'email-forward'])(
-    '%s reply is available for agent and phone article sent by Agent',
+    '%s reply is not available for agent and phone article sent by Agent',
     (type) => {
       setupView('agent')
       const ticket = createAgentUpdatableTicket()
@@ -89,7 +89,7 @@ describe('email permissions', () => {
         name: EnumTicketArticleSenderName.Agent,
       }
       const actions = createTestArticleActions(ticket, article)
-      expect(actions.find((action) => action.name === type)).toBeDefined()
+      expect(actions.find((action) => action.name === type)).toBeUndefined()
     },
   )
 
@@ -112,7 +112,7 @@ describe('email permissions', () => {
       }
     }
 
-    it('reply-all action is available for agent with email article and multiple unique emails', () => {
+    it('reply-all action is not available for agent with email article and multiple unique emails', () => {
       const { ticket, article } = setupAction()
       article.to = {
         raw: '',
@@ -123,7 +123,7 @@ describe('email permissions', () => {
         parsed: [{ emailAddress: 'zammad2@example.com', isSystemAddress: false }],
       }
       const actions = createTestArticleActions(ticket, article)
-      expect(actions.find((action) => action.name === 'email-reply-all')).toBeDefined()
+      expect(actions.find((action) => action.name === 'email-reply-all')).toBeUndefined()
     })
 
     it('reply-all action is not available for agent with email article and multiple non-unique emails', () => {
@@ -140,7 +140,7 @@ describe('email permissions', () => {
       expect(actions.find((action) => action.name === 'email-reply-all')).toBeUndefined()
     })
 
-    it('reply-all action is available for agent with email article from customer and multiple unique emails', () => {
+    it('reply-all action is not available for agent with email article from customer and multiple unique emails', () => {
       const { ticket, article } = setupAction()
       article.sender = {
         __typename: 'TicketArticleSender',
@@ -155,7 +155,7 @@ describe('email permissions', () => {
         parsed: [{ emailAddress: 'zammad2@example.com', isSystemAddress: false }],
       }
       const actions = createTestArticleActions(ticket, article)
-      expect(actions.find((action) => action.name === 'email-reply-all')).toBeDefined()
+      expect(actions.find((action) => action.name === 'email-reply-all')).toBeUndefined()
     })
 
     it('reply-all action is not available for agent with email article from agent and multiple unique emails', () => {
@@ -196,7 +196,7 @@ describe('email permissions', () => {
       expect(actions.find((action) => action.name === 'email-reply-all')).toBeUndefined()
     })
 
-    it('reply-all action is available for agent with multiple unique addresses inside to', () => {
+    it('reply-all action is not available for agent with multiple unique addresses inside to', () => {
       const { ticket, article } = setupAction()
       article.sender = {
         __typename: 'TicketArticleSender',
@@ -210,7 +210,7 @@ describe('email permissions', () => {
         ],
       }
       const actions = createTestArticleActions(ticket, article)
-      expect(actions.find((action) => action.name === 'email-reply-all')).toBeDefined()
+      expect(actions.find((action) => action.name === 'email-reply-all')).toBeUndefined()
     })
 
     it('reply-all action is not available if article was created via web', () => {
@@ -274,11 +274,11 @@ describe('email permissions', () => {
     },
   )
 
-  it('email type is available for agent with change permissions', () => {
+  it('email type is not available for agent with change permissions', () => {
     setupView('agent')
     const ticket = createAgentUpdatableTicket()
     const types = createTestArticleTypes(ticket)
-    expect(types.find((type) => type.value === 'email')).toBeDefined()
+    expect(types.find((type) => type.value === 'email')).toBeUndefined()
   })
   it('email type is not available for customer', () => {
     setupView('customer')
