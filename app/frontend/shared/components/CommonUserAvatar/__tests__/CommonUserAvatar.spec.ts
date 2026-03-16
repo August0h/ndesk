@@ -71,7 +71,7 @@ describe('CommonUserAvatar', () => {
     const avatar = view.getByTestId('common-avatar')
 
     expect(avatar).toHaveStyle({
-      backgroundImage: `url(/${logo})`,
+      backgroundImage: `url("${logo}")`,
     })
   })
 
