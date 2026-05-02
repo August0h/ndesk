@@ -1,0 +1,88 @@
+x-shared:
+  zammad-service: &zammad-service
+    build:
+      context: .
+      args:
+        COMMIT_SHA: "${COOLIFY_BRANCH:-newbyte-stable}"
+    environment: &zammad-environment
+      MEMCACHE_SERVERS: "${SERVICE_NAME_ZAMMAD_MEMCACHED:-zammad-memcached}:11211"
+      ZAMMAD_RAILSSERVER_HOST: "${SERVICE_NAME_ZAMMAD_RAILSSERVER:-zammad-railsserver}"
+      ZAMMAD_WEBSOCKET_HOST: "${SERVICE_NAME_ZAMMAD_WEBSOCKET:-zammad-websocket}"
+      POSTGRESQL_DB: zammad_production
+      POSTGRESQL_HOST: "${SERVICE_NAME_ZAMMAD_POSTGRESQL:-zammad-postgresql}"
+      POSTGRESQL_USER: zammad
+      POSTGRESQL_PASS: zammad
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_OPTIONS: "?pool=20"
+      REDIS_URL: "redis://${SERVICE_NAME_ZAMMAD_REDIS:-zammad-redis}:6379"
+      ELASTICSEARCH_ENABLED: "false"
+      ZAMMAD_FQDN: "${SERVICE_FQDN_ZAMMAD_NGINX:-localhost}"
+      ZAMMAD_HTTP_TYPE: https
+      NGINX_SERVER_SCHEME: http
+      NGINX_SERVER_NAME: "${SERVICE_FQDN_ZAMMAD_NGINX:-localhost}"
+      RAILS_TRUSTED_PROXIES: '["127.0.0.1", "::1", "172.16.0.0/12", "10.0.0.0/8"]'
+      TZ: America/Sao_Paulo
+    depends_on:
+      - zammad-memcached
+      - zammad-postgresql
+      - zammad-redis
+    restart: unless-stopped
+
+services:
+  zammad-init:
+    <<: *zammad-service
+    command: ["zammad-init"]
+    depends_on:
+      - zammad-postgresql
+    restart: on-failure
+    user: 0:0
+
+  zammad-railsserver:
+    <<: *zammad-service
+    command: ["zammad-railsserver"]
+    mem_limit: 1500m
+    depends_on:
+      - zammad-init
+
+  zammad-websocket:
+    <<: *zammad-service
+    command: ["zammad-websocket"]
+    mem_limit: 512m
+    depends_on:
+      - zammad-init
+
+  zammad-scheduler:
+    <<: *zammad-service
+    command: ["zammad-scheduler"]
+    mem_limit: 512m
+    depends_on:
+      - zammad-init
+
+  zammad-nginx:
+    <<: *zammad-service
+    command: ["zammad-nginx"]
+    mem_limit: 256m
+    expose:
+      - "8080"
+    depends_on:
+      - zammad-railsserver
+
+  zammad-postgresql:
+    image: postgres:17.9-alpine
+    environment:
+      POSTGRES_DB: zammad_production
+      POSTGRES_USER: zammad
+      POSTGRES_PASSWORD: zammad
+    mem_limit: 512m
+    restart: unless-stopped
+
+  zammad-redis:
+    image: redis:8.6.1-alpine
+    mem_limit: 256m
+    restart: unless-stopped
+
+  zammad-memcached:
+    image: memcached:1.6.40-alpine
+    command: memcached -m 128M
+    mem_limit: 256m
+    restart: unless-stopped
