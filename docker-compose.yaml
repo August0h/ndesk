@@ -18,7 +18,7 @@ x-shared:
       ELASTICSEARCH_ENABLED: "false"
       ZAMMAD_FQDN: "${SERVICE_FQDN_ZAMMAD_NGINX:-localhost}"
       ZAMMAD_HTTP_TYPE: https
-      NGINX_SERVER_SCHEME: http
+      NGINX_SERVER_SCHEME: https
       NGINX_SERVER_NAME: "${SERVICE_FQDN_ZAMMAD_NGINX:-localhost}"
       RAILS_TRUSTED_PROXIES: '["127.0.0.1", "::1", "172.16.0.0/12", "10.0.0.0/8"]'
       TZ: America/Sao_Paulo
