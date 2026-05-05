@@ -201,6 +201,12 @@ class TicketArticlesController < ApplicationController
         range_end   = $2.empty? ? total_size - 1 : $2.to_i
         range_end   = [range_end, total_size - 1].min
 
+        if range_start > range_end || range_start >= total_size
+          response.headers['Content-Range'] = "bytes */#{total_size}"
+          head :range_not_satisfiable
+          return
+        end
+
         response.headers['Content-Range'] = "bytes #{range_start}-#{range_end}/#{total_size}"
         response.headers['Content-Disposition'] = "#{download_file.disposition}; filename=\"#{download_file.filename}\""
 

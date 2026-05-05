@@ -230,6 +230,34 @@ class App.ArticleViewItem extends App.ControllerObserver
       seekBar.on 'input', ->
         audio.currentTime = $(this).val()
 
+      volumeBar  = container.find('.js-audio-volume')
+      muteBtn    = container.find('.js-audio-mute')
+      iconVolOn  = container.find('.js-icon-volume-on')
+      iconVolOff = container.find('.js-icon-volume-off')
+      previousVolume = 1
+
+      volumeBar.on 'input', ->
+        audio.volume = parseFloat($(this).val())
+        if audio.volume is 0
+          iconVolOn.hide()
+          iconVolOff.show()
+        else
+          iconVolOn.show()
+          iconVolOff.hide()
+
+      muteBtn.on 'click', ->
+        if audio.volume > 0
+          previousVolume = audio.volume
+          audio.volume = 0
+          volumeBar.val(0)
+          iconVolOn.hide()
+          iconVolOff.show()
+        else
+          audio.volume = previousVolume
+          volumeBar.val(previousVolume)
+          iconVolOn.show()
+          iconVolOff.hide()
+
   # set see more options
   setSeeMore: =>
     return if @el.is(':hidden')

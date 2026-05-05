@@ -195,5 +195,53 @@ RSpec.describe 'Ticket Article Attachments', authenticated_as: -> { agent }, typ
         expect(json_response['attachments']).to be_blank
       end
     end
+
+    context 'with range requests' do
+      let(:ticket1) { create(:ticket, group: group) }
+      let(:article1) { create(:ticket_article, ticket: ticket1) }
+
+      let(:store_file_content) { 'Hello, this is test content for range requests!' }
+      let!(:store_file) do
+        create(:store,
+               object:      'Ticket::Article',
+               o_id:        article1.id,
+               data:        store_file_content,
+               filename:    'range_test.txt',
+               preferences: { 'Content-Type' => 'text/plain' })
+      end
+
+      it 'serves partial content for valid range' do
+        get "/api/v1/ticket_attachment/#{ticket1.id}/#{article1.id}/#{store_file.id}",
+            headers: { 'Range' => 'bytes=0-4' }
+
+        expect(response).to have_http_status(:partial_content)
+        expect(response.body).to eq('Hello')
+        expect(response.headers['Content-Range']).to eq("bytes 0-4/#{store_file_content.bytesize}")
+      end
+
+      it 'returns 416 when range start exceeds end' do
+        get "/api/v1/ticket_attachment/#{ticket1.id}/#{article1.id}/#{store_file.id}",
+            headers: { 'Range' => 'bytes=50000-10' }
+
+        expect(response).to have_http_status(:range_not_satisfiable)
+        expect(response.headers['Content-Range']).to eq("bytes */#{store_file_content.bytesize}")
+      end
+
+      it 'returns 416 when range start exceeds file size' do
+        get "/api/v1/ticket_attachment/#{ticket1.id}/#{article1.id}/#{store_file.id}",
+            headers: { 'Range' => 'bytes=999999-' }
+
+        expect(response).to have_http_status(:range_not_satisfiable)
+        expect(response.headers['Content-Range']).to eq("bytes */#{store_file_content.bytesize}")
+      end
+
+      it 'clamps range end to file size' do
+        get "/api/v1/ticket_attachment/#{ticket1.id}/#{article1.id}/#{store_file.id}",
+            headers: { 'Range' => "bytes=0-99999" }
+
+        expect(response).to have_http_status(:partial_content)
+        expect(response.body).to eq(store_file_content)
+      end
+    end
   end
 end

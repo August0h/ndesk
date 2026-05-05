@@ -186,6 +186,13 @@ class App.TicketZoomArticleNew extends App.Controller
     return detected.browser.major == 10
 
   release: =>
+    if @_audioRecordTimer
+      clearInterval(@_audioRecordTimer)
+    if @_audioRecorder && @_audioRecorder.state isnt 'inactive'
+      @_audioRecorder.stop()
+    if @_audioStream
+      @_audioStream.getTracks().forEach (track) -> track.stop()
+
     if @subscribeIdTextModule
       App.Ticket.unsubscribe(@subscribeIdTextModule)
 
