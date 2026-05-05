@@ -7,10 +7,9 @@ class Note
     true
 
   @articleTypes: (articleTypes, ticket, ui) ->
-    internal = false
-    if ticket.currentView() is 'agent'
-      internal = ui.Config.get('ui_ticket_zoom_article_note_new_internal')
+    return articleTypes if ticket.currentView() is 'agent'
 
+    internal = false
     articleTypes.push {
       name:       __('note')
       icon:       'note'

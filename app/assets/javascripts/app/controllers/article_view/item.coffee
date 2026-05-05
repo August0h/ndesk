@@ -182,6 +182,9 @@ class App.ArticleViewItem extends App.ControllerObserver
       form_id:        @form_id
     )
 
+    # init custom audio players
+    @initAudioPlayers()
+
     # set see more
     @shown = false
     a = =>
@@ -190,6 +193,70 @@ class App.ArticleViewItem extends App.ControllerObserver
 
     # set highlighter
     @setHighlighter()
+
+  initAudioPlayers: =>
+    @$('.js-audio-player').each ->
+      container = $(this)
+      audio     = container.find('.js-audio-el')[0]
+      playBtn   = container.find('.js-audio-play')
+      seekBar   = container.find('.js-audio-seek')
+      timeLabel = container.find('.js-audio-time')
+      iconPlay  = container.find('.js-icon-play')
+      iconPause = container.find('.js-icon-pause')
+
+      formatTime = (s) ->
+        m = Math.floor(s / 60)
+        s = Math.floor(s % 60)
+        "#{m}:#{if s < 10 then '0' else ''}#{s}"
+
+      playBtn.on 'click', ->
+        if audio.paused then audio.play() else audio.pause()
+
+      $(audio).on 'play', ->
+        iconPlay.hide()
+        iconPause.show()
+
+      $(audio).on 'pause ended', ->
+        iconPlay.show()
+        iconPause.hide()
+
+      $(audio).on 'loadedmetadata', ->
+        seekBar.attr('max', audio.duration)
+
+      $(audio).on 'timeupdate', ->
+        seekBar.val(audio.currentTime)
+        timeLabel.text(formatTime(audio.currentTime))
+
+      seekBar.on 'input', ->
+        audio.currentTime = $(this).val()
+
+      volumeBar  = container.find('.js-audio-volume')
+      muteBtn    = container.find('.js-audio-mute')
+      iconVolOn  = container.find('.js-icon-volume-on')
+      iconVolOff = container.find('.js-icon-volume-off')
+      previousVolume = 1
+
+      volumeBar.on 'input', ->
+        audio.volume = parseFloat($(this).val())
+        if audio.volume is 0
+          iconVolOn.hide()
+          iconVolOff.show()
+        else
+          iconVolOn.show()
+          iconVolOff.hide()
+
+      muteBtn.on 'click', ->
+        if audio.volume > 0
+          previousVolume = audio.volume
+          audio.volume = 0
+          volumeBar.val(0)
+          iconVolOn.hide()
+          iconVolOff.show()
+        else
+          audio.volume = previousVolume
+          volumeBar.val(previousVolume)
+          iconVolOn.show()
+          iconVolOff.hide()
 
   # set see more options
   setSeeMore: =>

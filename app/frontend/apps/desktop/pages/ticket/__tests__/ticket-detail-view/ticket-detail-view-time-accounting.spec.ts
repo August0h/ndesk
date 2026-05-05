@@ -186,7 +186,7 @@ describe('Ticket detail view', () => {
 
       await getNode('form-ticket-edit-1')?.settled
 
-      await view.events.click(await view.findByRole('button', { name: 'Add internal note' }))
+      await view.events.click(await view.findByRole('button', { name: 'Add phone call' }))
 
       const editor = await view.findByRole('textbox', { name: 'Text' })
       await view.events.type(editor, 'Foo note')

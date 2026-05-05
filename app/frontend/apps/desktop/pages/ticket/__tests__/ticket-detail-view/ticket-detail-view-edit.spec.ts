@@ -1,7 +1,7 @@
 // Copyright (C) 2012-2026 Zammad Foundation, https://zammad-foundation.org/
 
 import { getNode } from '@formkit/core'
-import { getByLabelText, getByRole, waitFor, within } from '@testing-library/vue'
+import { waitFor, within } from '@testing-library/vue'
 import { expect } from 'vitest'
 
 import { visitView } from '#tests/support/components/visitView.ts'
@@ -9,10 +9,6 @@ import { mockApplicationConfig } from '#tests/support/mock-applicationConfig.ts'
 import { mockPermissions } from '#tests/support/mock-permissions.ts'
 import { waitForNextTick } from '#tests/support/utils.ts'
 
-import {
-  mockAutocompleteSearchRecipientQuery,
-  waitForAutocompleteSearchRecipientQueryCalls,
-} from '#shared/components/Form/fields/FieldRecipient/graphql/queries/autocompleteSearch/recipient.mocks.ts'
 import { mockFormUpdaterQuery } from '#shared/components/Form/graphql/queries/formUpdater.mocks.ts'
 import { waitForTicketUpdateMutationCalls } from '#shared/entities/ticket/graphql/mutations/update.mocks.ts'
 import { mockTicketArticlesQuery } from '#shared/entities/ticket/graphql/queries/ticket/articles.mocks.ts'
@@ -204,11 +200,7 @@ describe('Ticket detail view', () => {
   })
 
   describe('Article actions', () => {
-    it('adds an internal note', async () => {
-      mockApplicationConfig({
-        ui_ticket_zoom_article_note_new_internal: true,
-      })
-
+    it('does not show internal note button for agents', async () => {
       mockTicketQuery({
         ticket: createDummyTicket({
           articleType: 'phone',
@@ -219,128 +211,27 @@ describe('Ticket detail view', () => {
         }),
       })
 
-      mockTicketArticlesQuery({
-        articles: {
-          totalCount: 1,
-          edges: [
-            {
-              node: createDummyArticle({
-                articleType: 'phone',
-                internal: false,
-              }),
-            },
-          ],
-        },
-      })
-
       mockFormUpdaterQuery({
         formUpdater: {
           fields: {
-            group_id: {
-              options: [
-                {
-                  value: 1,
-                  label: 'Users',
-                },
-                {
-                  value: 2,
-                  label: 'test group',
-                },
-              ],
-            },
-            owner_id: {
-              options: [
-                {
-                  value: 3,
-                  label: 'Test Admin Agent',
-                },
-              ],
-            },
-            state_id: {
-              options: [
-                {
-                  value: 4,
-                  label: 'closed',
-                },
-                {
-                  value: 2,
-                  label: 'open',
-                },
-                {
-                  value: 6,
-                  label: 'pending close',
-                },
-                {
-                  value: 3,
-                  label: 'pending reminder',
-                },
-              ],
-            },
-            pending_time: {
-              show: false,
-            },
-            priority_id: {
-              options: [
-                {
-                  value: 1,
-                  label: '1 low',
-                },
-                {
-                  value: 2,
-                  label: '2 normal',
-                },
-                {
-                  value: 3,
-                  label: '3 high',
-                },
-              ],
-            },
+            group_id: { options: [{ value: 1, label: 'Users' }] },
+            owner_id: { options: [{ value: 3, label: 'Test Admin Agent' }] },
+            state_id: { options: [{ value: 2, label: 'open' }] },
+            pending_time: { show: false },
+            priority_id: { options: [{ value: 2, label: '2 normal' }] },
           },
-          flags: {
-            newArticlePresent: false,
-          },
+          flags: { newArticlePresent: false },
         },
       })
 
       const view = await visitView('/tickets/1')
 
-      await view.events.click(await view.findByRole('button', { name: 'Add internal note' }))
-
-      const complementary = await view.findByRole('complementary', {
-        name: 'Reply',
-      })
-
-      expect(getByRole(complementary, 'heading', { level: 2, name: 'Reply' })).toBeInTheDocument()
-
       await getNode('form-ticket-edit-1')?.settled
 
-      expect(getByLabelText(complementary, 'Visibility')).toHaveTextContent('Internal')
-
-      expect(view.getByTestId('article-reply-stripes-panel')).toHaveClass('bg-stripes')
-
-      const editor = await view.findByRole('textbox', { name: 'Text' })
-
-      // FIXME: This is not possible to test ATM, due to TipTap editor not being supported in JSDOM.
-      // expect(editor).toHaveFocus()
-
-      await view.events.type(editor, 'Foo note')
-
-      await getNode('form-ticket-edit-1')?.settled
-
-      await view.events.click(view.getByRole('button', { name: 'Update' }))
-
-      const calls = await waitForTicketUpdateMutationCalls()
-
-      expect(calls?.at(-1)?.variables).toEqual(
-        expect.objectContaining({
-          input: expect.objectContaining({
-            article: expect.objectContaining({ body: 'Foo note' }),
-          }),
-        }),
-      )
+      expect(view.queryByRole('button', { name: 'Add internal note' })).not.toBeInTheDocument()
     })
 
-    it('replies to an article', async () => {
+    it('does not show email reply button for agents', async () => {
       mockTicketQuery({
         ticket: createDummyTicket({
           group: {
@@ -375,46 +266,9 @@ describe('Ticket detail view', () => {
       mockFormUpdaterQuery({
         formUpdater: {
           fields: {
-            group_id: {
-              options: [
-                {
-                  value: 1,
-                  label: 'Users',
-                },
-                {
-                  value: 2,
-                  label: 'test group',
-                },
-              ],
-            },
-            owner_id: {
-              options: [
-                {
-                  value: 3,
-                  label: 'Test Admin Agent',
-                },
-              ],
-            },
-            state_id: {
-              options: [
-                {
-                  value: 4,
-                  label: 'closed',
-                },
-                {
-                  value: 2,
-                  label: 'open',
-                },
-                {
-                  value: 6,
-                  label: 'pending close',
-                },
-                {
-                  value: 3,
-                  label: 'pending reminder',
-                },
-              ],
-            },
+            group_id: { options: [{ value: 1, label: 'Users' }] },
+            owner_id: { options: [{ value: 3, label: 'Test Admin Agent' }] },
+            state_id: { options: [{ value: 2, label: 'open' }] },
             pending_time: {
               show: false,
             },
@@ -445,26 +299,10 @@ describe('Ticket detail view', () => {
 
       const articles = await view.findAllByRole('article')
 
-      await view.events.click(await within(articles[0]).findByRole('button', { name: 'Reply' }))
-
-      await view.events.type(await view.findByRole('textbox', { name: 'Text' }), 'Foo email')
-
-      await getNode('form-ticket-edit-1')?.settled
-
-      await view.events.click(view.getByRole('button', { name: 'Update' }))
-
-      const calls = await waitForTicketUpdateMutationCalls()
-
-      expect(calls?.at(-1)?.variables).toEqual(
-        expect.objectContaining({
-          input: expect.objectContaining({
-            article: expect.objectContaining({ body: 'Foo email' }),
-          }),
-        }),
-      )
+      expect(within(articles[0]).queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument()
     })
 
-    it('forwards to an article', async () => {
+    it('does not show email forward button for agents', async () => {
       mockTicketQuery({
         ticket: createDummyTicket({
           group: {
@@ -575,41 +413,7 @@ describe('Ticket detail view', () => {
         }),
       )
 
-      await view.events.click(
-        await view.findByRole('button', {
-          name: 'Forward',
-        }),
-      )
-
-      const to = view.getByLabelText('To')
-
-      await view.events.click(to)
-
-      mockAutocompleteSearchRecipientQuery({
-        autocompleteSearchRecipient: [],
-      })
-
-      await view.events.type(within(to).getByRole('searchbox'), 'nicole.braun@zammad.org')
-
-      await waitForAutocompleteSearchRecipientQueryCalls()
-
-      await view.events.click(view.getByRole('button', { name: 'add new email address' }))
-
-      await getNode('form-ticket-edit-1')?.settled
-
-      await view.events.click(await view.findByRole('button', { name: 'Update' }))
-
-      const calls = await waitForTicketUpdateMutationCalls()
-
-      expect(calls?.at(-1)?.variables).toEqual(
-        expect.objectContaining({
-          input: expect.objectContaining({
-            article: expect.objectContaining({
-              body: expect.stringContaining('---Begin forwarded message:---'),
-            }),
-          }),
-        }),
-      )
+      expect(view.queryByRole('button', { name: 'Forward' })).not.toBeInTheDocument()
     })
 
     it('discards unsaved changes', async () => {
@@ -897,7 +701,7 @@ describe('Ticket detail view', () => {
       await waitForNextTick(true)
 
       // Discard changes inside the reply form
-      await view.events.click(view.getByRole('button', { name: 'Add reply' }))
+      await view.events.click(view.getByRole('button', { name: 'Add phone call' }))
 
       await waitFor(() => expect(view.queryByRole('textbox', { name: 'Text' })).toBeInTheDocument())
 
@@ -919,7 +723,7 @@ describe('Ticket detail view', () => {
         ).not.toBeInTheDocument()
       })
 
-      await view.events.click(view.getByRole('button', { name: 'Add reply' }))
+      await view.events.click(view.getByRole('button', { name: 'Add phone call' }))
 
       await view.events.click(view.getByRole('button', { name: 'Discard unsaved reply' }))
 
@@ -1045,26 +849,7 @@ describe('Ticket detail view', () => {
 
       const articles = await view.findAllByRole('article')
 
-      await view.events.click(await within(articles[0]).findByRole('button', { name: 'Reply' }))
-
-      await view.events.type(
-        await view.findByRole('textbox', { name: 'Text' }),
-        'Reply. Check attachment.',
-      )
-
-      await getNode('form-ticket-edit-1')?.settled
-
-      await view.events.click(view.getByRole('button', { name: 'Update' }))
-
-      const dialog = await view.findByRole('dialog', {
-        name: 'Confirmation',
-      })
-      expect(dialog).toBeInTheDocument()
-
-      const dialogView = within(dialog)
-      expect(
-        dialogView.getByText('Did you plan to include attachments with this message?'),
-      ).toBeInTheDocument()
+      expect(within(articles[0]).queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument()
     })
   })
 

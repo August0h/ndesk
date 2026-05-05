@@ -72,25 +72,23 @@ describe('ArticleBubbleActionList', () => {
   it('does not show top level actions on hover (js-dom limitation)', () => {
     const wrapper = renderArticleBubbleActionList()
 
-    expect(wrapper.getByTestId('top-level-article-action-container')).toHaveClass('opacity-0')
+    expect(wrapper.queryByTestId('top-level-article-action-container')).not.toBeInTheDocument()
   })
 
-  it('has reply action', async () => {
+  it('has no reply action for email articles', async () => {
     const wrapper = renderArticleBubbleActionList()
 
-    expect(wrapper.getByRole('button', { name: 'Reply' })).toBeInTheDocument()
+    expect(wrapper.queryByRole('button', { name: 'Reply' })).not.toBeInTheDocument()
   })
 
-  it('shows all popover actions', async () => {
+  it('shows no email popover actions', async () => {
     const wrapper = renderArticleBubbleActionList()
 
-    await wrapper.events.click(wrapper.getByRole('button', { name: 'Action menu button' }))
-
-    const items = wrapper.getAllByRole('menuitem')
-    expect(items.length).toBeGreaterThanOrEqual(3)
-    expect(wrapper.getByRole('menuitem', { name: 'Forward' })).toBeInTheDocument()
-    expect(wrapper.getByRole('menuitem', { name: 'Download original email' })).toBeInTheDocument()
-    expect(wrapper.getByRole('menuitem', { name: 'Download raw email' })).toBeInTheDocument()
+    expect(wrapper.queryByRole('menuitem', { name: 'Forward' })).not.toBeInTheDocument()
+    expect(
+      wrapper.queryByRole('menuitem', { name: 'Download original email' }),
+    ).not.toBeInTheDocument()
+    expect(wrapper.queryByRole('menuitem', { name: 'Download raw email' })).not.toBeInTheDocument()
   })
 
   it('does not show reply all when single recipient', async () => {
@@ -99,18 +97,13 @@ describe('ArticleBubbleActionList', () => {
     expect(wrapper.queryByRole('button', { name: 'Reply all' })).not.toBeInTheDocument()
   })
 
-  it('shows two popover actions when original email unavailable', async () => {
+  it('shows no popover actions when original email unavailable', async () => {
     const wrapper = renderArticleBubbleActionList({
       articleOverrides: { attachmentsWithoutInline: [] },
     })
 
-    await wrapper.events.click(wrapper.getByRole('button', { name: 'Action menu button' }))
-
-    const items = wrapper.getAllByRole('menuitem')
-
-    expect(items.length).toBeGreaterThanOrEqual(2)
-    expect(wrapper.getByRole('menuitem', { name: 'Forward' })).toBeInTheDocument()
-    expect(wrapper.getByRole('menuitem', { name: 'Download raw email' })).toBeInTheDocument()
+    expect(wrapper.queryByRole('menuitem', { name: 'Forward' })).not.toBeInTheDocument()
+    expect(wrapper.queryByRole('menuitem', { name: 'Download raw email' })).not.toBeInTheDocument()
     expect(
       wrapper.queryByRole('menuitem', { name: 'Download original email' }),
     ).not.toBeInTheDocument()
@@ -119,7 +112,7 @@ describe('ArticleBubbleActionList', () => {
   it('renders right-position actions with reversed order class', () => {
     const wrapper = renderArticleBubbleActionList({ position: 'right' })
 
-    expect(wrapper.getByTestId('top-level-article-action-container')).toHaveClass('-order-1!')
+    expect(wrapper.queryByTestId('top-level-article-action-container')).not.toBeInTheDocument()
   })
 
   it('does not render actions when ticket is not editable', () => {

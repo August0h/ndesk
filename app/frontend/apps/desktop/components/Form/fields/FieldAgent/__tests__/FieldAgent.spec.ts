@@ -180,7 +180,7 @@ describe('Form - Field - Agent - Query', () => {
 
     // User with ID 1 should show the logo.
     expect(getByTestId(selectOptions[0], 'common-avatar')).toHaveStyle({
-      backgroundImage: `url(/${logo})`,
+      backgroundImage: `url("${logo}")`,
     })
 
     await wrapper.events.click(wrapper.getByLabelText('Clear search'))
