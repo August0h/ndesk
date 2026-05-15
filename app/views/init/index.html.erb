@@ -1,15 +1,16 @@
 <!-- svgstore fallback -->
 <%= javascript_tag nonce: true do -%>
   /*
-    detect if browser is
+    detect if browser needs inline SVG injection:
     - Chrome 14-20
     - Android Browser 4.1+
     - iOS 6-7
     - Safari 6
     - Edge 12
     - IE 9-11
+    - Firefox (clip-path inside <symbol> breaks with external <use> refs)
   */
-  window.svgPolyfill = /\bEdge\/12\b|\bTrident\/[567]\b|\bVersion\/7.0 Safari\b/.test(navigator.userAgent) || (navigator.userAgent.match(/AppleWebKit\/(\d+)/) || [])[1] < 537;
+  window.svgPolyfill = /\bEdge\/12\b|\bTrident\/[567]\b|\bVersion\/7.0 Safari\b|\bFirefox\/\b/.test(navigator.userAgent) || (navigator.userAgent.match(/AppleWebKit\/(\d+)/) || [])[1] < 537;
 
   (function (doc) {
     if(!svgPolyfill)
@@ -30,7 +31,7 @@
 <% end -%>
 <div id="app"></div>
 <div class="splash">
-  <svg class="icon icon-logo"><use xlink:href="<%= icons_url %>#icon-logo" /></svg>
+  <img class="icon icon-logo" src="/assets/images/logo.svg" alt="Logo" width="42" height="36">
   <div class="splash-title">Loading…</div>
   <noscript>
     <style>
