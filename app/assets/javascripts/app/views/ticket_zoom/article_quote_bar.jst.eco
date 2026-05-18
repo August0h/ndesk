@@ -1,0 +1,10 @@
+<div class="quote-reply-bar js-quoteReplyBar">
+  <div class="quote-reply-bar-border"></div>
+  <div class="quote-reply-bar-content">
+    <div class="quote-reply-bar-author"><%= @author %></div>
+    <div class="quote-reply-bar-preview"><%= @body %></div>
+  </div>
+  <div class="quote-reply-bar-close js-quoteReplyClose">
+    <%- @Icon('diagonal-cross') %>
+  </div>
+</div>
