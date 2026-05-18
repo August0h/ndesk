@@ -925,7 +925,7 @@ class App.TicketZoomArticleNew extends App.Controller
     @$('.js-audioPreviewTime').text('0:00 / 0:00')
 
   _uploadAudioRecording: =>
-    ext      = if @_audioMimeType is 'audio/webm' then 'webm' else 'ogg'
+    ext      = if @_audioMimeType.indexOf('audio/webm') is 0 then 'webm' else 'ogg'
     date     = new Date().toISOString().replace(/[:.]/g, '-')
     filename = "audio-#{date}.#{ext}"
     formData = new FormData()
