@@ -5,23 +5,26 @@
     <% for attachment in @attachments: %>
       <% content_type = @ContentOrMimeType(attachment) %>
       <% if @canPlayAudio(content_type): %>
-        <div class="attachment attachment--row js-audio-player" style="flex-direction:column;align-items:flex-start;gap:3px;padding:4px 0;">
-          <span class="attachment-name" style="font-size:11px;color:#aaa;"><%= attachment.filename %> (<%- @humanFileSize(attachment.size) %>)</span>
-          <div style="display:flex;align-items:center;gap:6px;width:100%;max-width:280px;">
+        <div class="attachment attachment--row audio-player-row js-audio-player">
+          <span class="attachment-name audio-filename"><%= attachment.filename %> (<%- @humanFileSize(attachment.size) %>)</span>
+          <div class="audio-player-inner">
             <audio class="js-audio-el" preload="none" style="display:none;">
               <source src="<%= attachment.url.replace('disposition=attachment','disposition=inline') %>" type="<%= content_type %>">
             </audio>
-            <button type="button" class="js-audio-play" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;min-width:26px;background:#4a90d9;border:none;border-radius:50%;cursor:pointer;padding:0;">
-              <svg class="js-icon-play" width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
-              <svg class="js-icon-pause" width="10" height="10" viewBox="0 0 10 10" fill="white" style="display:none;"><rect x="2" y="1" width="2.5" height="8" rx="1"/><rect x="5.5" y="1" width="2.5" height="8" rx="1"/></svg>
+            <button type="button" class="audio-btn audio-btn--play js-audio-play">
+              <svg class="js-icon-play" width="8" height="8" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
+              <svg class="js-icon-pause hide" width="8" height="8" viewBox="0 0 10 10" fill="white"><rect x="2" y="1" width="2.5" height="8" rx="1"/><rect x="5.5" y="1" width="2.5" height="8" rx="1"/></svg>
             </button>
-            <input type="range" class="js-audio-seek" min="0" value="0" step="0.1" style="flex:1;height:4px;cursor:pointer;accent-color:#4a90d9;">
-            <span class="js-audio-time" style="font-size:10px;color:#888;white-space:nowrap;min-width:32px;text-align:right;">0:00</span>
-            <button type="button" class="js-audio-mute" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;min-width:20px;background:none;border:none;cursor:pointer;padding:0;" title="Mute">
-              <svg class="js-icon-volume-on" width="14" height="14" viewBox="0 0 16 16" fill="#888"><path d="M8 1.5l-4 3H1v7h3l4 3V1.5z"/><path d="M11 4.5c1.2 1.1 2 2.7 2 4.5s-.8 3.4-2 4.5" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></svg>
-              <svg class="js-icon-volume-off" width="14" height="14" viewBox="0 0 16 16" fill="#888" style="display:none;"><path d="M8 1.5l-4 3H1v7h3l4 3V1.5z"/><line x1="11" y1="5" x2="15" y2="11" stroke="#888" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="5" x2="11" y2="11" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <input type="range" class="audio-range audio-range--seek js-audio-seek" min="0" value="0" step="0.1">
+            <span class="audio-time js-audio-time">0:00</span>
+            <button type="button" class="audio-mute-btn js-audio-mute" title="Mute">
+              <svg class="js-icon-volume-on" width="12" height="12" viewBox="0 0 16 16" fill="#888"><path d="M8 1.5l-4 3H1v7h3l4 3V1.5z"/><path d="M11 4.5c1.2 1.1 2 2.7 2 4.5s-.8 3.4-2 4.5" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <svg class="js-icon-volume-off hide" width="12" height="12" viewBox="0 0 16 16" fill="#888"><path d="M8 1.5l-4 3H1v7h3l4 3V1.5z"/><line x1="11" y1="5" x2="15" y2="11" stroke="#888" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="5" x2="11" y2="11" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></svg>
             </button>
-            <input type="range" class="js-audio-volume" min="0" max="1" value="1" step="0.05" style="width:50px;height:4px;cursor:pointer;accent-color:#4a90d9;">
+            <input type="range" class="audio-range audio-range--volume js-audio-volume" min="0" max="1" value="1" step="0.05">
+            <select class="audio-speed js-audio-speed" title="<%- @T('Playback speed') %>">
+              <%- @audioSpeedOptions() %>
+            </select>
           </div>
         </div>
       <% else if !@C('ui_ticket_zoom_attachments_preview'): %>

@@ -34,6 +34,13 @@ class App.TicketZoomArticleNew extends App.Controller
     'click .js-active-toggle-type':  'toggleTypeButton'
     'click .js-startRecord':         'startAudioRecord'
     'click .js-stopRecord':          'stopAudioRecord'
+    'click .js-audioPreviewPlay':    'toggleAudioPreview'
+    'input .js-audioPreviewVolume':  'changeAudioPreviewVolume'
+    'change .js-audioPreviewSpeed':  'changeAudioPreviewSpeed'
+    'click .js-audioPreviewSpeed':   'stopPropagation'
+    'mousedown .js-audioPreviewSpeed': 'stopPropagation'
+    'click .js-audioPreviewConfirm': 'confirmAudioPreview'
+    'click .js-audioPreviewDiscard': 'discardAudioPreview'
 
   constructor: ->
     super
@@ -819,12 +826,15 @@ class App.TicketZoomArticleNew extends App.Controller
       .then (stream) =>
         @_audioStream  = stream
         @_audioChunks  = []
-        mimeType = if MediaRecorder.isTypeSupported('audio/webm') then 'audio/webm' else 'audio/ogg'
-        @_audioRecorder = new MediaRecorder(stream, { mimeType: mimeType })
+        mimeType = if MediaRecorder.isTypeSupported('audio/webm;codecs=opus') then 'audio/webm;codecs=opus'
+        else if MediaRecorder.isTypeSupported('audio/webm') then 'audio/webm'
+        else 'audio/ogg'
+        @_audioRecorder = new MediaRecorder(stream, { mimeType: mimeType, audioBitsPerSecond: 128000 })
         @_audioRecorder.ondataavailable = (e) =>
           @_audioChunks.push(e.data) if e.data.size > 0
+        @_audioMimeType = mimeType
         @_audioRecorder.onstop = =>
-          @_uploadAudioRecording(mimeType)
+          @_showAudioPreview()
         @_audioRecorder.start()
         @_audioRecordSeconds = 0
         @_audioRecordTimer = setInterval =>
@@ -844,24 +854,110 @@ class App.TicketZoomArticleNew extends App.Controller
     @_audioRecorder.stop()
     @_audioStream.getTracks().forEach (track) -> track.stop()
     @$('.js-stopRecord').addClass('hide')
-    @$('.js-startRecord').removeClass('hide')
     @$('.js-recordTime').text('0s')
 
-  _uploadAudioRecording: (mimeType) =>
-    ext      = if mimeType is 'audio/webm' then 'webm' else 'ogg'
+  _showAudioPreview: =>
+    @_audioBlob = new Blob(@_audioChunks, { type: @_audioMimeType })
+    @_audioPreviewUrl = URL.createObjectURL(@_audioBlob)
+    @_audioPreviewEl = new Audio()
+    @_audioPreviewEl.preload = 'metadata'
+    @_audioTimeUpdateHandler = =>
+      mins = Math.floor(@_audioPreviewEl.currentTime / 60)
+      secs = Math.floor(@_audioPreviewEl.currentTime % 60)
+      total = @_audioPreviewEl.duration || 0
+      totalMins = Math.floor(total / 60)
+      totalSecs = Math.floor(total % 60)
+      @$('.js-audioPreviewTime').text("#{mins}:#{String(secs).padStart(2, '0')} / #{totalMins}:#{String(totalSecs).padStart(2, '0')}")
+    @_audioEndedHandler = =>
+      @$('.js-audioPlayIcon').removeClass('hide')
+      @$('.js-audioPauseIcon').addClass('hide')
+    @_audioMetadataHandler = =>
+      total = @_audioPreviewEl.duration || 0
+      totalMins = Math.floor(total / 60)
+      totalSecs = Math.floor(total % 60)
+      @$('.js-audioPreviewTime').text("0:00 / #{totalMins}:#{String(totalSecs).padStart(2, '0')}")
+    @_audioPreviewEl.addEventListener 'timeupdate', @_audioTimeUpdateHandler
+    @_audioPreviewEl.addEventListener 'ended', @_audioEndedHandler
+    @_audioPreviewEl.addEventListener 'loadedmetadata', @_audioMetadataHandler
+    @_audioPreviewEl.src = @_audioPreviewUrl
+    @$('.js-audioPreview').addClass('is-visible')
+
+  toggleAudioPreview: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    return if !@_audioPreviewEl
+    if @_audioPreviewEl.paused
+      @_audioPreviewEl.play().catch(->)
+      @$('.js-audioPlayIcon').addClass('hide')
+      @$('.js-audioPauseIcon').removeClass('hide')
+    else
+      @_audioPreviewEl.pause()
+      @$('.js-audioPlayIcon').removeClass('hide')
+      @$('.js-audioPauseIcon').addClass('hide')
+
+  changeAudioPreviewVolume: (e) =>
+    return if !@_audioPreviewEl
+    @_audioPreviewEl.volume = parseFloat(e.target.value)
+
+  changeAudioPreviewSpeed: (e) =>
+    return if !@_audioPreviewEl
+    @_audioPreviewEl.playbackRate = parseFloat(e.target.value)
+
+  confirmAudioPreview: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    @_cleanupAudioPreview()
+    @_uploadAudioRecording()
+
+  discardAudioPreview: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    @_cleanupAudioPreview()
+    @_audioBlob = null
+    @$('.js-startRecord').removeClass('hide')
+
+  _cleanupAudioPreview: =>
+    if @_audioPreviewEl
+      @_audioPreviewEl.pause()
+      @_audioPreviewEl.removeEventListener 'timeupdate', @_audioTimeUpdateHandler if @_audioTimeUpdateHandler
+      @_audioPreviewEl.removeEventListener 'ended', @_audioEndedHandler if @_audioEndedHandler
+      @_audioPreviewEl.removeEventListener 'loadedmetadata', @_audioMetadataHandler if @_audioMetadataHandler
+      @_audioPreviewEl = null
+      @_audioTimeUpdateHandler = null
+      @_audioEndedHandler = null
+      @_audioMetadataHandler = null
+    if @_audioPreviewUrl
+      URL.revokeObjectURL(@_audioPreviewUrl)
+      @_audioPreviewUrl = null
+    @$('.js-audioPreview').removeClass('is-visible')
+    @$('.js-audioPlayIcon').removeClass('hide')
+    @$('.js-audioPauseIcon').addClass('hide')
+    @$('.js-audioPreviewTime').text('0:00 / 0:00')
+
+  _uploadAudioRecording: =>
+    ext      = if @_audioMimeType.indexOf('audio/webm') is 0 then 'webm' else 'ogg'
     date     = new Date().toISOString().replace(/[:.]/g, '-')
     filename = "audio-#{date}.#{ext}"
-    blob     = new Blob(@_audioChunks, { type: mimeType })
     formData = new FormData()
-    formData.append('File', blob, filename)
+    formData.append('File', @_audioBlob, filename)
     xhr = new XMLHttpRequest()
     xhr.open('POST', "#{App.Config.get('api_path')}/upload_caches/#{@form_id}")
     xhr.setRequestHeader('X-CSRF-Token', App.Ajax.token())
     xhr.onload = =>
-      return if xhr.status isnt 200
+      if xhr.status isnt 200
+        App.Event.trigger('notify', [{ type: 'error', msg: App.i18n.translateInline('Audio upload failed') }])
+        @_audioBlob = null
+        @$('.js-startRecord').removeClass('hide')
+        return
       response = JSON.parse(xhr.responseText)
       @attachments.push(response.data)
       @renderAttachment(response.data)
+      @_audioBlob = null
+      @$('.js-startRecord').removeClass('hide')
+    xhr.onerror = =>
+      App.Event.trigger('notify', [{ type: 'error', msg: App.i18n.translateInline('Audio upload failed') }])
+      @_audioBlob = null
+      @$('.js-startRecord').removeClass('hide')
     xhr.send(formData)
 
   actions: ->

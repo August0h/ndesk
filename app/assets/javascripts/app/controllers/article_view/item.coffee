@@ -210,15 +210,15 @@ class App.ArticleViewItem extends App.ControllerObserver
         "#{m}:#{if s < 10 then '0' else ''}#{s}"
 
       playBtn.on 'click', ->
-        if audio.paused then audio.play() else audio.pause()
+        if audio.paused then audio.play().catch(->) else audio.pause()
 
       $(audio).on 'play', ->
-        iconPlay.hide()
-        iconPause.show()
+        iconPlay.addClass('hide')
+        iconPause.removeClass('hide')
 
       $(audio).on 'pause ended', ->
-        iconPlay.show()
-        iconPause.hide()
+        iconPlay.removeClass('hide')
+        iconPause.addClass('hide')
 
       $(audio).on 'loadedmetadata', ->
         seekBar.attr('max', audio.duration)
@@ -239,24 +239,28 @@ class App.ArticleViewItem extends App.ControllerObserver
       volumeBar.on 'input', ->
         audio.volume = parseFloat($(this).val())
         if audio.volume is 0
-          iconVolOn.hide()
-          iconVolOff.show()
+          iconVolOn.addClass('hide')
+          iconVolOff.removeClass('hide')
         else
-          iconVolOn.show()
-          iconVolOff.hide()
+          iconVolOn.removeClass('hide')
+          iconVolOff.addClass('hide')
 
       muteBtn.on 'click', ->
         if audio.volume > 0
           previousVolume = audio.volume
           audio.volume = 0
           volumeBar.val(0)
-          iconVolOn.hide()
-          iconVolOff.show()
+          iconVolOn.addClass('hide')
+          iconVolOff.removeClass('hide')
         else
           audio.volume = previousVolume
           volumeBar.val(previousVolume)
-          iconVolOn.show()
-          iconVolOff.hide()
+          iconVolOn.removeClass('hide')
+          iconVolOff.addClass('hide')
+
+      speedSelect = container.find('.js-audio-speed')
+      speedSelect.on 'change', ->
+        audio.playbackRate = parseFloat($(this).val())
 
   # set see more options
   setSeeMore: =>
