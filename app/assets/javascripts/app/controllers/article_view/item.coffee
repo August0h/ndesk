@@ -258,6 +258,10 @@ class App.ArticleViewItem extends App.ControllerObserver
           iconVolOn.show()
           iconVolOff.hide()
 
+      speedSelect = container.find('.js-audio-speed')
+      speedSelect.on 'change', ->
+        audio.playbackRate = parseFloat($(this).val())
+
   # set see more options
   setSeeMore: =>
     return if @el.is(':hidden')
