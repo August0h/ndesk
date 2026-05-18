@@ -859,7 +859,8 @@ class App.TicketZoomArticleNew extends App.Controller
   _showAudioPreview: =>
     @_audioBlob = new Blob(@_audioChunks, { type: @_audioMimeType })
     @_audioPreviewUrl = URL.createObjectURL(@_audioBlob)
-    @_audioPreviewEl = new Audio(@_audioPreviewUrl)
+    @_audioPreviewEl = new Audio()
+    @_audioPreviewEl.preload = 'metadata'
     @_audioTimeUpdateHandler = =>
       mins = Math.floor(@_audioPreviewEl.currentTime / 60)
       secs = Math.floor(@_audioPreviewEl.currentTime % 60)
@@ -870,8 +871,15 @@ class App.TicketZoomArticleNew extends App.Controller
     @_audioEndedHandler = =>
       @$('.js-audioPlayIcon').removeClass('hide')
       @$('.js-audioPauseIcon').addClass('hide')
+    @_audioMetadataHandler = =>
+      total = @_audioPreviewEl.duration || 0
+      totalMins = Math.floor(total / 60)
+      totalSecs = Math.floor(total % 60)
+      @$('.js-audioPreviewTime').text("0:00 / #{totalMins}:#{String(totalSecs).padStart(2, '0')}")
     @_audioPreviewEl.addEventListener 'timeupdate', @_audioTimeUpdateHandler
     @_audioPreviewEl.addEventListener 'ended', @_audioEndedHandler
+    @_audioPreviewEl.addEventListener 'loadedmetadata', @_audioMetadataHandler
+    @_audioPreviewEl.src = @_audioPreviewUrl
     @$('.js-audioPreview').addClass('is-visible')
 
   toggleAudioPreview: (e) =>
@@ -913,9 +921,11 @@ class App.TicketZoomArticleNew extends App.Controller
       @_audioPreviewEl.pause()
       @_audioPreviewEl.removeEventListener 'timeupdate', @_audioTimeUpdateHandler if @_audioTimeUpdateHandler
       @_audioPreviewEl.removeEventListener 'ended', @_audioEndedHandler if @_audioEndedHandler
+      @_audioPreviewEl.removeEventListener 'loadedmetadata', @_audioMetadataHandler if @_audioMetadataHandler
       @_audioPreviewEl = null
       @_audioTimeUpdateHandler = null
       @_audioEndedHandler = null
+      @_audioMetadataHandler = null
     if @_audioPreviewUrl
       URL.revokeObjectURL(@_audioPreviewUrl)
       @_audioPreviewUrl = null
