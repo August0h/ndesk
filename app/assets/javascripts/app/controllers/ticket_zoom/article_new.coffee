@@ -858,21 +858,26 @@ class App.TicketZoomArticleNew extends App.Controller
     @_audioBlob = new Blob(@_audioChunks, { type: @_audioMimeType })
     @_audioPreviewUrl = URL.createObjectURL(@_audioBlob)
     @_audioPreviewEl = new Audio(@_audioPreviewUrl)
-    @_audioPreviewEl.addEventListener 'timeupdate', =>
+    @_audioTimeUpdateHandler = =>
       mins = Math.floor(@_audioPreviewEl.currentTime / 60)
       secs = Math.floor(@_audioPreviewEl.currentTime % 60)
-      @$('.js-audioPreviewTime').text("#{mins}:#{String(secs).padStart(2, '0')}")
-    @_audioPreviewEl.addEventListener 'ended', =>
+      total = @_audioPreviewEl.duration || 0
+      totalMins = Math.floor(total / 60)
+      totalSecs = Math.floor(total % 60)
+      @$('.js-audioPreviewTime').text("#{mins}:#{String(secs).padStart(2, '0')} / #{totalMins}:#{String(totalSecs).padStart(2, '0')}")
+    @_audioEndedHandler = =>
       @$('.js-audioPlayIcon').removeClass('hide')
       @$('.js-audioPauseIcon').addClass('hide')
-    @$('.js-audioPreview').removeClass('hide')
+    @_audioPreviewEl.addEventListener 'timeupdate', @_audioTimeUpdateHandler
+    @_audioPreviewEl.addEventListener 'ended', @_audioEndedHandler
+    @$('.js-audioPreview').addClass('is-visible')
 
   toggleAudioPreview: (e) =>
     e.preventDefault()
     e.stopPropagation()
     return if !@_audioPreviewEl
     if @_audioPreviewEl.paused
-      @_audioPreviewEl.play()
+      @_audioPreviewEl.play().catch(->)
       @$('.js-audioPlayIcon').addClass('hide')
       @$('.js-audioPauseIcon').removeClass('hide')
     else
@@ -904,14 +909,18 @@ class App.TicketZoomArticleNew extends App.Controller
   _cleanupAudioPreview: =>
     if @_audioPreviewEl
       @_audioPreviewEl.pause()
+      @_audioPreviewEl.removeEventListener 'timeupdate', @_audioTimeUpdateHandler if @_audioTimeUpdateHandler
+      @_audioPreviewEl.removeEventListener 'ended', @_audioEndedHandler if @_audioEndedHandler
       @_audioPreviewEl = null
+      @_audioTimeUpdateHandler = null
+      @_audioEndedHandler = null
     if @_audioPreviewUrl
       URL.revokeObjectURL(@_audioPreviewUrl)
       @_audioPreviewUrl = null
-    @$('.js-audioPreview').addClass('hide')
+    @$('.js-audioPreview').removeClass('is-visible')
     @$('.js-audioPlayIcon').removeClass('hide')
     @$('.js-audioPauseIcon').addClass('hide')
-    @$('.js-audioPreviewTime').text('0:00')
+    @$('.js-audioPreviewTime').text('0:00 / 0:00')
 
   _uploadAudioRecording: =>
     ext      = if @_audioMimeType is 'audio/webm' then 'webm' else 'ogg'
@@ -923,10 +932,18 @@ class App.TicketZoomArticleNew extends App.Controller
     xhr.open('POST', "#{App.Config.get('api_path')}/upload_caches/#{@form_id}")
     xhr.setRequestHeader('X-CSRF-Token', App.Ajax.token())
     xhr.onload = =>
-      return if xhr.status isnt 200
+      if xhr.status isnt 200
+        App.Event.trigger('notify', [{ type: 'error', msg: App.i18n.translateInline('Audio upload failed') }])
+        @_audioBlob = null
+        @$('.js-startRecord').removeClass('hide')
+        return
       response = JSON.parse(xhr.responseText)
       @attachments.push(response.data)
       @renderAttachment(response.data)
+      @_audioBlob = null
+      @$('.js-startRecord').removeClass('hide')
+    xhr.onerror = =>
+      App.Event.trigger('notify', [{ type: 'error', msg: App.i18n.translateInline('Audio upload failed') }])
       @_audioBlob = null
       @$('.js-startRecord').removeClass('hide')
     xhr.send(formData)

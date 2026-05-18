@@ -275,6 +275,17 @@ App.ViewHelpers =
     return true if contentType.match(/audio\/(webm|ogg|mpeg|mp4|wav|aac|flac)/i)
     false
 
+  audioSpeedOptions: ->
+    speeds = [
+      { value: '0.5',  label: '0.5x' }
+      { value: '0.75', label: '0.75x' }
+      { value: '1',    label: '1x', selected: true }
+      { value: '1.25', label: '1.25x' }
+      { value: '1.5',  label: '1.5x' }
+      { value: '2',    label: '2x' }
+    ]
+    speeds.map((s) -> "<option value=\"#{s.value}\"#{if s.selected then ' selected' else ''}>#{s.label}</option>").join('')
+
   unique_avatar: (seed, text, size = 40) ->
     baseSize = 40
     width  = 300 * size/baseSize

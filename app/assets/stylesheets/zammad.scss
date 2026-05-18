@@ -7926,6 +7926,121 @@ a.list-group-item.active > .badge,
   box-shadow: none;
 }
 
+.audio-controls {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 10;
+}
+
+.audio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  padding: 0;
+}
+
+.audio-btn--record { background: #4a90d9; }
+.audio-btn--stop {
+  background: #c0392b;
+  gap: 4px;
+  padding: 0 8px;
+  width: auto;
+}
+.audio-btn--confirm { background: #27ae60; }
+.audio-btn--discard { background: #c0392b; }
+.audio-btn--play { border-radius: 50%; }
+
+.audio-record-time,
+.audio-preview-time {
+  font-size: 11px;
+  font-weight: bold;
+  min-width: 30px;
+}
+
+.audio-record-time { color: white; }
+.audio-preview-time { color: #999; }
+
+.audio-preview {
+  display: none;
+  align-items: center;
+  gap: 4px;
+
+  &.is-visible {
+    display: inline-flex;
+  }
+}
+
+.audio-range {
+  height: 4px;
+  cursor: pointer;
+  accent-color: #4a90d9;
+}
+
+.audio-range--volume { width: 50px; }
+.audio-range--seek { flex: 1; }
+
+.audio-speed {
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 1px 2px;
+  cursor: pointer;
+  height: 20px;
+}
+
+.audio-player-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 4px 0;
+}
+
+.audio-player-row .audio-player-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.audio-player-row .audio-filename {
+  font-size: 11px;
+  color: #aaa;
+}
+
+.audio-player-row .audio-time {
+  font-size: 10px;
+  color: #888;
+  white-space: nowrap;
+  min-width: 32px;
+  text-align: right;
+}
+
+.audio-mute-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
 .article-attachment {
   position: absolute;
   bottom: -4px;

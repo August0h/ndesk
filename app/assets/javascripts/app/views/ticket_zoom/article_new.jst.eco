@@ -85,8 +85,8 @@
       <div class="textBubble js-writeArea" style="position:relative;">
         <div class="bubble-arrow"></div>
         <div class="js-textarea richtext-content articleNewEdit-body" dir="auto" contenteditable="true" data-name="body"><%- @article.body %></div>
-        <span style="position:absolute;bottom:8px;right:8px;display:inline-flex;align-items:center;gap:5px;z-index:10;">
-          <button type="button" class="js-startRecord" title="<%- @T('Record audio') %>" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#4a90d9;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+        <span class="audio-controls">
+          <button type="button" class="audio-btn audio-btn--record js-startRecord" title="<%- @T('Record audio') %>">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
               <rect x="9" y="2" width="6" height="11" rx="3"/>
               <path d="M5 11a7 7 0 0 0 14 0" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round"/>
@@ -94,14 +94,14 @@
               <line x1="9" y1="22" x2="15" y2="22" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </button>
-          <button type="button" class="js-stopRecord hide" title="<%- @T('Stop recording') %>" style="display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 8px;height:28px;background:#c0392b;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+          <button type="button" class="audio-btn audio-btn--stop js-stopRecord hide" title="<%- @T('Stop recording') %>">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
             </svg>
-            <span class="js-recordTime" style="font-size:11px;color:white;font-weight:bold;">0s</span>
+            <span class="audio-record-time js-recordTime">0s</span>
           </button>
-          <span class="js-audioPreview hide" style="display:inline-flex;align-items:center;gap:4px;">
-            <button type="button" class="js-audioPreviewPlay" title="<%- @T('Play') %>" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#4a90d9;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+          <span class="audio-preview js-audioPreview">
+            <button type="button" class="audio-btn audio-btn--record audio-btn--play js-audioPreviewPlay" title="<%- @T('Play') %>">
               <svg class="js-audioPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
                 <polygon points="6,3 20,12 6,21"/>
               </svg>
@@ -110,22 +110,17 @@
                 <rect x="15" y="3" width="4" height="18" rx="1"/>
               </svg>
             </button>
-            <span class="js-audioPreviewTime" style="font-size:11px;color:#999;font-weight:bold;min-width:30px;">0:00</span>
-            <input type="range" class="js-audioPreviewVolume" min="0" max="1" step="0.1" value="1" title="<%- @T('Volume') %>" style="width:50px;height:4px;cursor:pointer;accent-color:#4a90d9;">
-            <select class="js-audioPreviewSpeed" title="<%- @T('Playback speed') %>" style="background:#333;color:#fff;border:1px solid #555;border-radius:4px;font-size:10px;padding:1px 2px;cursor:pointer;height:20px;">
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1" selected>1x</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2x</option>
+            <span class="audio-preview-time js-audioPreviewTime">0:00 / 0:00</span>
+            <input type="range" class="audio-range audio-range--volume js-audioPreviewVolume" min="0" max="1" step="0.1" value="1" title="<%- @T('Volume') %>">
+            <select class="audio-speed js-audioPreviewSpeed" title="<%- @T('Playback speed') %>">
+              <%- @audioSpeedOptions() %>
             </select>
-            <button type="button" class="js-audioPreviewConfirm" title="<%- @T('Send audio') %>" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#27ae60;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+            <button type="button" class="audio-btn audio-btn--confirm js-audioPreviewConfirm" title="<%- @T('Send audio') %>">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
                 <polyline points="4,12 10,18 20,6" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button type="button" class="js-audioPreviewDiscard" title="<%- @T('Discard audio') %>" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#c0392b;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+            <button type="button" class="audio-btn audio-btn--discard js-audioPreviewDiscard" title="<%- @T('Discard audio') %>">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
                 <line x1="6" y1="6" x2="18" y2="18" stroke="white" stroke-width="3" stroke-linecap="round"/>
                 <line x1="18" y1="6" x2="6" y2="18" stroke="white" stroke-width="3" stroke-linecap="round"/>
