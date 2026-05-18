@@ -826,8 +826,10 @@ class App.TicketZoomArticleNew extends App.Controller
       .then (stream) =>
         @_audioStream  = stream
         @_audioChunks  = []
-        mimeType = if MediaRecorder.isTypeSupported('audio/webm') then 'audio/webm' else 'audio/ogg'
-        @_audioRecorder = new MediaRecorder(stream, { mimeType: mimeType })
+        mimeType = if MediaRecorder.isTypeSupported('audio/webm;codecs=opus') then 'audio/webm;codecs=opus'
+        else if MediaRecorder.isTypeSupported('audio/webm') then 'audio/webm'
+        else 'audio/ogg'
+        @_audioRecorder = new MediaRecorder(stream, { mimeType: mimeType, audioBitsPerSecond: 128000 })
         @_audioRecorder.ondataavailable = (e) =>
           @_audioChunks.push(e.data) if e.data.size > 0
         @_audioMimeType = mimeType
