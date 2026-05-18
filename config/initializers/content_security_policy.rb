@@ -48,6 +48,7 @@ Rails.application.config.content_security_policy do |policy| # rubocop:disable M
   policy.script_src  :self, :unsafe_eval
   policy.style_src   :self, :unsafe_inline
   policy.frame_src   'www.youtube.com', 'player.vimeo.com'
+  policy.media_src   :self, :blob
 
   if Rails.env.development?
     websocket_uris = proc do
