@@ -21,7 +21,11 @@ class QuoteReply
       user = App.User.find(article.origin_by_id || article.created_by_id)
       author = user?.displayName() || ''
 
-    bodyPreview = App.Utils.html2text(article.body, true)
+    cleanBody = $('<div>').html(article.body)
+    cleanBody.find('.quote-reply-embedded').remove()
+    cleanBodyHtml = cleanBody.html()
+
+    bodyPreview = App.Utils.html2text(cleanBodyHtml, true)
     if bodyPreview.length > 200
       bodyPreview = bodyPreview.substring(0, 200) + '...'
 
@@ -30,7 +34,7 @@ class QuoteReply
       article_id: article.id
       author:     author
       body:       bodyPreview
-      bodyHtml:   article.body
+      bodyHtml:   cleanBodyHtml
       created_at: article.created_at
     })
 
