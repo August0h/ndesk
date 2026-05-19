@@ -353,7 +353,8 @@ class App.TicketZoomArticleNew extends App.Controller
         quoteBodyText = quoteBodyText.substring(0, 500) + '...'
       quoteBody = App.Utils.text2html(quoteBodyText)
       quoteAuthor = App.Utils.htmlEscape(@quotedArticle.author)
-      quoteHtml = "<a class=\"quote-reply-embedded\" href=\"#article-#{@quotedArticle.article_id}\" data-target-id=\"#{@quotedArticle.article_id}\" data-target-type=\"article\"><div class=\"quote-reply-embedded-author\">#{quoteAuthor}</div><div class=\"quote-reply-embedded-body\">#{quoteBody}</div></a>"
+      safeId = App.Utils.htmlEscape(String(@quotedArticle.article_id))
+      quoteHtml = "<a class=\"quote-reply-embedded\" href=\"#article-#{safeId}\" data-target-id=\"#{safeId}\" data-target-type=\"article\"><div class=\"quote-reply-embedded-author\">#{quoteAuthor}</div><div class=\"quote-reply-embedded-body\">#{quoteBody}</div></a>"
       params.body = quoteHtml + params.body
 
     if params.internal

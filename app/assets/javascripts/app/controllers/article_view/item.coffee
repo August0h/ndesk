@@ -416,7 +416,7 @@ class App.ArticleViewItem extends App.ControllerObserver
   scrollToQuotedArticle: (e) ->
     e.preventDefault()
     e.stopPropagation()
-    articleId = $(e.currentTarget).data('target-id')
+    articleId = String($(e.currentTarget).data('target-id')).replace(/[^0-9]/g, '')
     return if !articleId
     target = $(".ticket-article-item[data-id='#{articleId}']")
     return if !target.length
