@@ -8081,6 +8081,122 @@ a.list-group-item.active > .badge,
   flex-shrink: 0;
 }
 
+.quote-reply-bar {
+  display: flex;
+  align-items: stretch;
+  background: hsl(0, 0%, 95%);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  max-height: 80px;
+}
+
+.quote-reply-bar-border {
+  width: 4px;
+  min-height: 100%;
+  background: hsl(202, 66%, 55%);
+  flex-shrink: 0;
+}
+
+.quote-reply-bar-content {
+  flex: 1;
+  padding: 6px 10px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.quote-reply-bar-author {
+  font-weight: bold;
+  font-size: 12px;
+  color: hsl(202, 66%, 55%);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quote-reply-bar-preview {
+  font-size: 12px;
+  color: hsl(0, 0%, 50%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quote-reply-bar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  cursor: pointer;
+  color: hsl(0, 0%, 50%);
+
+  &:hover {
+    color: hsl(0, 0%, 20%);
+  }
+
+  .icon {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+a.quote-reply-embedded,
+.quote-reply-embedded {
+  display: block;
+  border-left: 4px solid hsl(202, 66%, 55%);
+  background: hsl(0, 0%, 95%);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+
+  &:hover {
+    background: hsl(0, 0%, 90%);
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+.quote-highlight {
+  animation: quote-flash 1.5s ease-out;
+}
+
+@keyframes quote-flash {
+  0%,
+  20% {
+    background-color: hsl(202, 66%, 85%);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.quote-reply-embedded-author {
+  font-weight: bold;
+  font-size: 12px;
+  color: hsl(202, 66%, 55%);
+  margin-bottom: 2px;
+}
+
+.quote-reply-embedded-body {
+  font-size: 13px;
+  color: hsl(0, 0%, 50%);
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.is-internal .quote-reply-embedded {
+  border-left-color: hsl(18, 87%, 65%);
+}
+
+.is-internal .quote-reply-embedded-author {
+  color: hsl(18, 87%, 65%);
+}
+
 .article-attachment {
   position: absolute;
   bottom: -4px;

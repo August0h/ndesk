@@ -41,6 +41,7 @@ class App.TicketZoomArticleNew extends App.Controller
     'mousedown .js-audioPreviewSpeed': 'stopPropagation'
     'click .js-audioPreviewConfirm': 'confirmAudioPreview'
     'click .js-audioPreviewDiscard': 'discardAudioPreview'
+    'click .js-quoteReplyClose':     'clearQuoteReply'
 
   constructor: ->
     super
@@ -95,6 +96,11 @@ class App.TicketZoomArticleNew extends App.Controller
       @tokanice(data.type.name)
     )
 
+    @controllerBind('ui::ticket::setQuoteReply', (data) =>
+      return if data.ticket_id.toString() isnt @ticket_id.toString()
+      @setQuoteReply(data)
+    )
+
     @controllerBind('ui::ticket::import_draft_attachments', @importDraftAttachments)
     @controllerBind('ui::ticket::shared_draft_saved',       @sharedDraftSaved)
 
@@ -110,9 +116,10 @@ class App.TicketZoomArticleNew extends App.Controller
     @controllerBind('ui::ticket::taskReset', (data) =>
       @releaseGlobalClickEvents()
       return if data.ticket_id.toString() isnt @ticket_id.toString()
-      @type        = 'note'
-      @defaults    = {}
-      @attachments = []
+      @type           = 'note'
+      @defaults       = {}
+      @attachments    = []
+      @quotedArticle  = null
       @render()
     )
 
@@ -339,6 +346,16 @@ class App.TicketZoomArticleNew extends App.Controller
         type             = App.TicketArticleType.findByAttribute('name', 'web')
         params.type_id   = type.id
         params.sender_id = sender.id
+
+    if @quotedArticle && params.body
+      quoteBodyText = App.Utils.html2text(@quotedArticle.bodyHtml, true)
+      if quoteBodyText.length > 500
+        quoteBodyText = quoteBodyText.substring(0, 500) + '...'
+      quoteBody = App.Utils.text2html(quoteBodyText)
+      quoteAuthor = App.Utils.htmlEscape(@quotedArticle.author)
+      safeId = App.Utils.htmlEscape(String(@quotedArticle.article_id))
+      quoteHtml = "<a class=\"quote-reply-embedded\" href=\"#article-#{safeId}\" data-target-id=\"#{safeId}\" data-target-type=\"article\"><div class=\"quote-reply-embedded-author\">#{quoteAuthor}</div><div class=\"quote-reply-embedded-body\">#{quoteBody}</div></a>"
+      params.body = quoteHtml + params.body
 
     if params.internal
       params.internal = true
@@ -817,6 +834,24 @@ class App.TicketZoomArticleNew extends App.Controller
     @el
       .find('input[name=shared_draft_id]')
       .val(options.shared_draft_id)
+
+  setQuoteReply: (data) =>
+    @quotedArticle = data
+    @openTextarea(null, true, true)
+    @$('.js-quoteReplyBar').remove()
+    quoteBarHtml = App.view('ticket_zoom/article_quote_bar')(
+      author: data.author
+      body:   data.body
+      Icon:   App.Utils.icon
+    )
+    @$('.js-textarea').before(quoteBarHtml)
+
+  clearQuoteReply: (e) =>
+    if e
+      e.preventDefault()
+      e.stopPropagation()
+    @quotedArticle = null
+    @$('.js-quoteReplyBar').remove()
 
   startAudioRecord: (e) =>
     e.preventDefault()

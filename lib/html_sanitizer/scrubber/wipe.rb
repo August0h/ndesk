@@ -179,7 +179,7 @@ class HtmlSanitizer
       #   on  this class to identify quoted messages
       # - `zammad-table` - because it is used to style Zammad internal tables
       def classes_allowlist
-        %w[js-signatureMarker yahoo_quoted zammad-table]
+        %w[js-signatureMarker yahoo_quoted zammad-table quote-reply-embedded quote-reply-embedded-author quote-reply-embedded-body]
       end
 
       def attributes_2_css

@@ -25,6 +25,7 @@ class App.ArticleViewItem extends App.ControllerObserver
     'click .js-securityRetryProcess':            'retrySecurityProcess'
     'click .js-retryWhatsAppAttachmentDownload': 'retryWhatsAppAttachmentDownload'
     'click .js-fetchOriginalFormatting':         'fetchOriginalFormatting'
+    'click a.quote-reply-embedded':              'scrollToQuotedArticle'
 
   @SEE_MORE_MIN_HEIGHT: 90
   @SEE_MORE_MAX_HEIGHT: 560
@@ -411,6 +412,19 @@ class App.ArticleViewItem extends App.ControllerObserver
     originalFormattingLink.target = '_blank'
     originalFormattingLink.click()
     originalFormattingLink.remove()
+
+  scrollToQuotedArticle: (e) ->
+    e.preventDefault()
+    e.stopPropagation()
+    articleId = String($(e.currentTarget).data('target-id')).replace(/[^0-9]/g, '')
+    return if !articleId
+    target = $(".ticket-article-item[data-id='#{articleId}']")
+    return if !target.length
+    target.get(0).scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.addClass('quote-highlight')
+    setTimeout(->
+      target.removeClass('quote-highlight')
+    , 1500)
 
   stopPropagation: (e) ->
     e.stopPropagation()
