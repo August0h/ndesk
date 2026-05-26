@@ -206,6 +206,7 @@ class App.ArticleViewItem extends App.ControllerObserver
       iconPause = container.find('.js-icon-pause')
 
       formatTime = (s) ->
+        return '0:00' if !isFinite(s)
         m = Math.floor(s / 60)
         s = Math.floor(s % 60)
         "#{m}:#{if s < 10 then '0' else ''}#{s}"

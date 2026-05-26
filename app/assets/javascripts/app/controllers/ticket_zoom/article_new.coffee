@@ -42,6 +42,7 @@ class App.TicketZoomArticleNew extends App.Controller
     'click .js-audioPreviewConfirm': 'confirmAudioPreview'
     'click .js-audioPreviewDiscard': 'discardAudioPreview'
     'click .js-quoteReplyClose':     'clearQuoteReply'
+    'click .js-toggleCompose':       'toggleCompose'
 
   constructor: ->
     super
@@ -61,6 +62,7 @@ class App.TicketZoomArticleNew extends App.Controller
     @attachments      = @defaults.attachments || []
 
     @render()
+    @_bindScrollExpand()
 
     # set article type and expand text area
     @controllerBind('ui::ticket::setArticleType', (data) =>
@@ -200,6 +202,8 @@ class App.TicketZoomArticleNew extends App.Controller
     return detected.browser.major == 10
 
   release: =>
+    @el.closest('.main').off('scroll.composeExpand')
+
     if @_audioRecordTimer
       clearInterval(@_audioRecordTimer)
     if @_audioRecorder && @_audioRecorder.state isnt 'inactive'
@@ -846,6 +850,38 @@ class App.TicketZoomArticleNew extends App.Controller
     )
     @$('.js-textarea').before(quoteBarHtml)
 
+  toggleCompose: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    articleNew = @el.closest('.article-new')
+    scrollContainer = @el.closest('.main')
+    if scrollContainer.length && !articleNew.hasClass('is-collapsed')
+      atBottom = scrollContainer.scrollTop() + scrollContainer.height() >= scrollContainer.prop('scrollHeight') - 200
+      return if atBottom
+    articleNew.toggleClass('is-collapsed')
+    if articleNew.hasClass('is-collapsed')
+      setTimeout( =>
+        return if !scrollContainer.length
+        atBottom = scrollContainer.scrollTop() + scrollContainer.height() >= scrollContainer.prop('scrollHeight') - 50
+        if atBottom
+          articleNew.removeClass('is-collapsed')
+      , 200)
+
+  _bindScrollExpand: =>
+    @_scrollThrottled = false
+    @delay( =>
+      scrollContainer = @el.closest('.main')
+      return if !scrollContainer.length
+      scrollContainer.on 'scroll.composeExpand', =>
+        return if @_scrollThrottled
+        @_scrollThrottled = true
+        setTimeout((=> @_scrollThrottled = false), 100)
+        atBottom = scrollContainer.scrollTop() + scrollContainer.height() >= scrollContainer.prop('scrollHeight') - 200
+        articleNew = @el.closest('.article-new')
+        if articleNew.hasClass('is-collapsed') && atBottom
+          articleNew.removeClass('is-collapsed')
+    , 500)
+
   clearQuoteReply: (e) =>
     if e
       e.preventDefault()
@@ -896,21 +932,16 @@ class App.TicketZoomArticleNew extends App.Controller
     @_audioPreviewUrl = URL.createObjectURL(@_audioBlob)
     @_audioPreviewEl = new Audio()
     @_audioPreviewEl.preload = 'metadata'
+    @_formatDuration = (seconds) =>
+      return "#{Math.floor(@_audioRecordSeconds / 60)}:#{String(@_audioRecordSeconds % 60).padStart(2, '0')}" if !isFinite(seconds)
+      "#{Math.floor(seconds / 60)}:#{String(Math.floor(seconds % 60)).padStart(2, '0')}"
     @_audioTimeUpdateHandler = =>
-      mins = Math.floor(@_audioPreviewEl.currentTime / 60)
-      secs = Math.floor(@_audioPreviewEl.currentTime % 60)
-      total = @_audioPreviewEl.duration || 0
-      totalMins = Math.floor(total / 60)
-      totalSecs = Math.floor(total % 60)
-      @$('.js-audioPreviewTime').text("#{mins}:#{String(secs).padStart(2, '0')} / #{totalMins}:#{String(totalSecs).padStart(2, '0')}")
+      @$('.js-audioPreviewTime').text("#{@_formatDuration(@_audioPreviewEl.currentTime)} / #{@_formatDuration(@_audioPreviewEl.duration)}")
     @_audioEndedHandler = =>
       @$('.js-audioPlayIcon').removeClass('hide')
       @$('.js-audioPauseIcon').addClass('hide')
     @_audioMetadataHandler = =>
-      total = @_audioPreviewEl.duration || 0
-      totalMins = Math.floor(total / 60)
-      totalSecs = Math.floor(total % 60)
-      @$('.js-audioPreviewTime').text("0:00 / #{totalMins}:#{String(totalSecs).padStart(2, '0')}")
+      @$('.js-audioPreviewTime').text("0:00 / #{@_formatDuration(@_audioPreviewEl.duration)}")
     @_audioPreviewEl.addEventListener 'timeupdate', @_audioTimeUpdateHandler
     @_audioPreviewEl.addEventListener 'ended', @_audioEndedHandler
     @_audioPreviewEl.addEventListener 'loadedmetadata', @_audioMetadataHandler
