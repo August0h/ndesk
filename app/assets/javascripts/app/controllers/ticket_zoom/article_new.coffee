@@ -899,6 +899,7 @@ class App.TicketZoomArticleNew extends App.Controller
         @_audioChunks  = []
         mimeType = if MediaRecorder.isTypeSupported('audio/webm;codecs=opus') then 'audio/webm;codecs=opus'
         else if MediaRecorder.isTypeSupported('audio/webm') then 'audio/webm'
+        else if MediaRecorder.isTypeSupported('audio/mp4') then 'audio/mp4'
         else 'audio/ogg'
         @_audioRecorder = new MediaRecorder(stream, { mimeType: mimeType, audioBitsPerSecond: 128000 })
         @_audioRecorder.ondataavailable = (e) =>
@@ -1001,7 +1002,9 @@ class App.TicketZoomArticleNew extends App.Controller
     @$('.js-audioPreviewTime').text('0:00 / 0:00')
 
   _uploadAudioRecording: =>
-    ext      = if @_audioMimeType.indexOf('audio/webm') is 0 then 'webm' else 'ogg'
+    ext      = if @_audioMimeType.indexOf('audio/webm') is 0 then 'webm'
+    else if @_audioMimeType.indexOf('audio/mp4') is 0 then 'm4a'
+    else 'ogg'
     date     = new Date().toISOString().replace(/[:.]/g, '-')
     filename = "audio-#{date}.#{ext}"
     formData = new FormData()
