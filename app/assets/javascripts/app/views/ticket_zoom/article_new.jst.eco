@@ -5,6 +5,9 @@
 <% end %>
 </div>
 <% end %>
+<button type="button" class="article-new-toggle js-toggleCompose" title="<%- @Ti('Minimize') %>">
+  <%- @Icon('arrow-down') %>
+</button>
 <form class="article-add <% if @article.internal: %>is-internal<% else: %>is-public<% end %>" data-type="<%= @article.type %>">
   <input type="hidden" name="type" value="<%= @article.type %>">
   <input type="hidden" name="internal" value="<%= @article.internal %>">
