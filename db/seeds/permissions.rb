@@ -537,11 +537,26 @@ Permission.create_if_not_exists(
   allow_signup: true,
 )
 
+Permission.create_if_not_exists(
+  name:        'csat.read',
+  label:       __('CSAT - Read'),
+  description: __('View CSAT surveys and statistics.'),
+  preferences: { prio: 1465 },
+)
+Permission.create_if_not_exists(
+  name:        'admin.csat',
+  label:       __('CSAT'),
+  description: __('Manage Customer Satisfaction settings.'),
+  preferences: { prio: 1335 },
+)
+
 admin = Role.find_by(name: 'Admin')
 admin.permission_grant('user_preferences')
 admin.permission_grant('admin')
 admin.permission_grant('report')
 admin.permission_grant('knowledge_base.editor')
+admin.permission_grant('csat.read')
+admin.permission_grant('admin.csat')
 
 agent = Role.find_by(name: 'Agent')
 agent.permission_grant('user_preferences')

@@ -1390,11 +1390,12 @@ RSpec.describe Ticket, type: :model do
 
       it 'destroys all related dependencies', current_user_id: 1 do
         refs_known = {
-          'Ticket::Article'         => { 'ticket_id' => 1 },
-          'Ticket::TimeAccounting'  => { 'ticket_id' => 1 },
-          'Ticket::SharedDraftZoom' => { 'ticket_id' => 0 },
-          'Checklist::Item'         => { 'ticket_id' => 1 },
-          'Ticket::DailyEventLock'  => { 'ticket_id' => 0 },
+          'Ticket::Article'            => { 'ticket_id' => 1 },
+          'Ticket::TimeAccounting'     => { 'ticket_id' => 1 },
+          'Ticket::SharedDraftZoom'    => { 'ticket_id' => 0 },
+          'Checklist::Item'            => { 'ticket_id' => 1 },
+          'Ticket::DailyEventLock'     => { 'ticket_id' => 0 },
+          'Ticket::SatisfactionRating' => { 'ticket_id' => 0 },
         }
 
         ticket         = create(:ticket)

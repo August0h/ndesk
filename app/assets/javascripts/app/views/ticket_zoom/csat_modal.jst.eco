@@ -1,0 +1,14 @@
+<!-- app/assets/javascripts/app/views/ticket_zoom/csat_modal.jst.eco -->
+<div class="csat-modal">
+  <p class="csat-modal__label"><%- @T('How was your support?') %></p>
+  <div class="csat-modal__stars">
+    <% for star in [1, 2, 3, 4, 5]: %>
+      <button type="button" class="js-csat-star csat-modal__star" data-value="<%= star %>" aria-label="<%- @T('%s stars', star) %>">★</button>
+    <% end %>
+  </div>
+  <% if @commentMode isnt 'off': %>
+    <label class="csat-modal__comment-label" for="csat-comment"><%- @T('Comment') %></label>
+    <textarea id="csat-comment" class="js-csat-comment csat-modal__comment" rows="4"></textarea>
+  <% end %>
+  <p class="js-csat-error csat-modal__error"></p>
+</div>

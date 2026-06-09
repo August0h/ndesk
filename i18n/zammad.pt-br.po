@@ -27821,3 +27821,39 @@ msgstr "∅ tempo de espera hoje"
 #~ "Intervalo de tempo no qual o atendente deve prestar outro retorno "
 #~ "informando as tratativas sobre o trabalho a ser feito ou que já esteja em "
 #~ "andamento para se resolver o chamado aberto."
+
+msgid "Rate this ticket"
+msgstr "Avalie este atendimento"
+
+msgid "How was your support?"
+msgstr "Como foi o seu atendimento?"
+
+msgid "Not now"
+msgstr "Agora não"
+
+msgid "Thanks for your feedback!"
+msgstr "Obrigado pela sua avaliação!"
+
+msgid "Please select a rating."
+msgstr "Selecione uma nota."
+
+msgid "Please add a comment."
+msgstr "Adicione um comentário."
+
+msgid "Could not save your rating."
+msgstr "Não foi possível salvar sua avaliação."
+
+msgid "%s stars"
+msgstr "%s estrelas"
+
+msgid "CSAT is not enabled"
+msgstr "O CSAT não está ativado"
+
+msgid "Only the ticket customer can rate"
+msgstr "Apenas o cliente do ticket pode avaliar"
+
+msgid "Ticket is not finalized"
+msgstr "O ticket não está finalizado"
+
+msgid "This ticket was already rated"
+msgstr "Este ticket já foi avaliado"

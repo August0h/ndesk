@@ -233,6 +233,22 @@ class App.TicketZoom extends App.Controller
 
     App.Event.trigger('ui::ticket::all::loaded', data)
 
+    @triggerSatisfactionRating()
+
+  triggerSatisfactionRating: =>
+    return if !App.Config.get('csat_integration')
+    return if !@currentTicketRaw or !@currentTicketRaw.satisfaction_ratable
+    return if !@ticket or @ticket.currentView() isnt 'customer'
+    return if @ticket.customer_id isnt App.User.current()?.id
+    return if App.LocalStorage.get("csat_dismissed_ticket_#{@ticket_id}", App.User.current()?.id)
+    return if @csatModalShown
+
+    @csatModalShown = true
+    new App.TicketZoomCsatModal(
+      container: @el.closest('.content')
+      ticket:    @ticket
+    )
+
   meta: =>
 
     # default attributes

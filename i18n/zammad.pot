@@ -21944,3 +21944,39 @@ msgstr ""
 #: app/assets/javascripts/app/views/dashboard/stats/ticket_waiting_time.jst.eco:3
 msgid "∅ Waiting time today"
 msgstr ""
+
+msgid "Rate this ticket"
+msgstr ""
+
+msgid "How was your support?"
+msgstr ""
+
+msgid "Not now"
+msgstr ""
+
+msgid "Thanks for your feedback!"
+msgstr ""
+
+msgid "Please select a rating."
+msgstr ""
+
+msgid "Please add a comment."
+msgstr ""
+
+msgid "Could not save your rating."
+msgstr ""
+
+msgid "%s stars"
+msgstr ""
+
+msgid "CSAT is not enabled"
+msgstr ""
+
+msgid "Only the ticket customer can rate"
+msgstr ""
+
+msgid "Ticket is not finalized"
+msgstr ""
+
+msgid "This ticket was already rated"
+msgstr ""

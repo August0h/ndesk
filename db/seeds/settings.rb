@@ -6172,3 +6172,82 @@ Setting.create_if_not_exists(
   },
   frontend:    true,
 )
+
+Setting.create_if_not_exists(
+  title:       __('Enable CSAT'),
+  name:        'csat_integration',
+  area:        'Ticket::CSAT',
+  description: __('Defines if customers are asked to rate resolved tickets.'),
+  options:     {
+    form: [
+      {
+        display: '',
+        null:    true,
+        name:    'csat_integration',
+        tag:     'boolean',
+        options: {
+          true  => 'yes',
+          false => 'no',
+        },
+      },
+    ],
+  },
+  state:       true,
+  preferences: {
+    permission: ['admin.csat'],
+  },
+  frontend:    true,
+)
+
+Setting.create_if_not_exists(
+  title:       __('CSAT comment'),
+  name:        'csat_comment',
+  area:        'Ticket::CSAT',
+  description: __('Whether the optional comment field is shown/required in the rating popup.'),
+  options:     {
+    form: [
+      {
+        display: '',
+        null:    false,
+        name:    'csat_comment',
+        tag:     'select',
+        options: {
+          'off'      => 'Off',
+          'optional' => 'Optional',
+          'required' => 'Required',
+        },
+      },
+    ],
+  },
+  state:       'optional',
+  preferences: {
+    permission: ['admin.csat'],
+  },
+  frontend:    true,
+)
+
+Setting.create_if_not_exists(
+  title:       __('CSAT trigger states'),
+  name:        'csat_closed_state_types',
+  area:        'Ticket::CSAT',
+  description: __('Which ticket state categories trigger the rating popup.'),
+  options:     {
+    form: [
+      {
+        display:  '',
+        null:     false,
+        multiple: true,
+        name:     'csat_closed_state_types',
+        tag:      'select',
+        options:  {
+          'closed' => 'closed',
+        },
+      },
+    ],
+  },
+  state:       %w[closed],
+  preferences: {
+    permission: ['admin.csat'],
+  },
+  frontend:    false,
+)

@@ -28,7 +28,7 @@ RSpec.describe Role do
     describe 'of "Admin" role:' do
       it 'has default admin permissions' do
         expect(described_class.find_by(name: 'Admin').permissions.pluck(:name))
-          .to match_array(%w[admin user_preferences report knowledge_base.editor])
+          .to match_array(%w[admin user_preferences report knowledge_base.editor csat.read admin.csat])
       end
     end
 
