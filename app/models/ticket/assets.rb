@@ -61,12 +61,41 @@ returns
   def filter_unauthorized_attributes(attributes)
     filtered_attributes = super
 
-    user_id = UserInfo.current_user_id
-    if user_id.present? && Setting.get('csat_integration')
-      user = User.lookup(id: user_id)
-      filtered_attributes['satisfaction_ratable'] = user.present? && Ticket::SatisfactionRating.ratable?(ticket: self, user:)
-    end
+    user = UserInfo.current_user_id.present? ? User.lookup(id: UserInfo.current_user_id) : nil
+    filtered_attributes.merge(satisfaction_api_attributes(user))
+  end
 
-    filtered_attributes
+  # Satisfaction attributes for REST ticket payloads. Reused by the assets
+  # filter above (?expand/?full/?all) and by TicketsController (plain GET).
+  # `satisfaction_ratable` stays per-user + behind csat_integration (popup logic);
+  # `satisfaction` (the rating data) is always exposed when a rating exists, for
+  # admin API consumers (see docs/csat/adr/0002).
+  def satisfaction_api_attributes(user)
+    attrs = {}
+    if user.present? && Setting.get('csat_integration')
+      attrs['satisfaction_ratable'] = Ticket::SatisfactionRating.ratable?(ticket: self, user:)
+    end
+    attrs['satisfaction'] = satisfaction_rating_payload
+    attrs
+  end
+
+  def satisfaction_rating_payload
+    # Read the persisted rating directly (one query): the satisfaction_ratable check
+    # above builds Ticket::SatisfactionRating.new(ticket: self, ...), which Rails
+    # caches on the has_one inverse association, so reading `satisfaction_rating`
+    # here can return an unsaved blank record. find_by is reliable across all
+    # serialization paths. On list endpoints this is one query per ticket
+    # (admin-only, capped at 100/page — accepted, see docs/csat/adr/0002).
+    rating = Ticket::SatisfactionRating.find_by(ticket_id: id)
+    return if rating.nil?
+
+    {
+      'score'      => rating.score,
+      'comment'    => rating.comment,
+      'agent_id'   => rating.agent_id,
+      'agent_name' => rating.agent&.fullname,
+      'group_id'   => rating.group_id,
+      'created_at' => rating.created_at,
+    }
   end
 end
