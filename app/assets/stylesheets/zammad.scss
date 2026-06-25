@@ -16327,3 +16327,46 @@ div.accounted-time-value {
     margin: 0;
   }
 }
+
+.csat-modal {
+  &__label {
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  &__stars {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  &__star {
+    background: none;
+    border: 0;
+    padding: 0 2px;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    color: hsl(0, 0%, 80%);
+
+    &:hover,
+    &.is-selected {
+      color: #f7b500;
+    }
+  }
+
+  &__comment-label {
+    display: block;
+    margin: 8px 0 4px;
+  }
+
+  &__comment {
+    width: 100%;
+  }
+
+  &__error {
+    color: hsl(0, 70%, 50%);
+    min-height: 1.2em;
+    margin-top: 8px;
+  }
+}

@@ -13,6 +13,9 @@ RSpec.describe SystemReport, current_user_id: 1, type: :model do
     describe 'settings plugin' do
       let(:non_confidential_settings) do
         [
+          'csat_integration',
+          'csat_comment',
+          'csat_closed_state_types',
           'ui_ticket_priority_icons',
           'kb_multi_lingual_support',
           'kb_active',

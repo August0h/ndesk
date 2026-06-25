@@ -38,7 +38,7 @@ class TicketsController < ApplicationController
       return
     end
 
-    render json: tickets
+    render json: tickets.map { |ticket| ticket.as_json.merge(ticket.satisfaction_api_attributes(current_user)) }
   end
 
   # GET /api/v1/tickets/1
@@ -65,7 +65,7 @@ class TicketsController < ApplicationController
       return
     end
 
-    render json: ticket
+    render json: ticket.as_json.merge(ticket.satisfaction_api_attributes(current_user))
   end
 
   def auto_assign_ticket(ticket)

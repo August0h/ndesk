@@ -691,6 +691,7 @@ RSpec.describe User, type: :model do
         'Ticket::Article::Type'              => { 'created_by_id' => 0, 'updated_by_id' => 0 },
         'Ticket::Article::Flag'              => { 'created_by_id' => 0 },
         'Ticket::Priority'                   => { 'created_by_id' => 0, 'updated_by_id' => 0 },
+        'Ticket::SatisfactionRating'         => { 'agent_id' => 0, 'created_by_id' => 0, 'customer_id' => 0, 'updated_by_id' => 0 },
         'Ticket::SharedDraftStart'           => { 'created_by_id' => 1, 'updated_by_id' => 0 },
         'Ticket::SharedDraftZoom'            => { 'created_by_id' => 1, 'updated_by_id' => 0 },
         'Ticket::TimeAccounting'             => { 'created_by_id' => 0 },
