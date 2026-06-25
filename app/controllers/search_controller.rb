@@ -53,6 +53,10 @@ class SearchController < ApplicationController
       # get params
       query = params[:query].try(:permit!)&.to_h || params[:query]
 
+      if query.blank?
+        return Service::Search::Result.new({}, [])
+      end
+
       Service::Search
         .new(current_user:, query:, objects: search_result_objects, options: search_result_options)
         .execute
