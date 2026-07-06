@@ -16334,6 +16334,10 @@ div.accounted-time-value {
     margin-bottom: 8px;
   }
 
+  &__group + &__group {
+    margin-top: 8px;
+  }
+
   &__stars {
     display: flex;
     gap: 4px;

@@ -8,11 +8,14 @@ class Ticket::SatisfactionRating < ApplicationModel
   belongs_to :agent,    class_name: 'User', optional: true
   belongs_to :group,    optional: true
 
-  validates :score, presence: true, inclusion: { in: 1..5 }
+  validates :score_service, presence: true, inclusion: { in: 1..5 }
+  # on: :create — linhas legadas (pré-dimensão, score_resolution NULL) continuam
+  # válidas se algum fluxo futuro as regravar (ex.: comment, que não é readonly)
+  validates :score_resolution, presence: true, inclusion: { in: 1..5 }, on: :create
   validates :ticket_id, uniqueness: { scope: :customer_id }
 
   # write-once: never mutate after registration
-  attr_readonly :ticket_id, :customer_id, :agent_id, :score
+  attr_readonly :ticket_id, :customer_id, :agent_id, :score_service, :score_resolution
 
   before_create :snapshot_agent_and_group
 

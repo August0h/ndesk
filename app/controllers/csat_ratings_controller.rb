@@ -6,10 +6,11 @@ class CsatRatingsController < ApplicationController
   # POST /api/v1/csat/ratings
   def create
     rating = ::Ticket::SatisfactionRating.new(
-      ticket:   Ticket.find(params[:ticket_id]),
-      customer: current_user,
-      score:    params[:score],
-      comment:  comment_value(params[:comment]),
+      ticket:           Ticket.find(params[:ticket_id]),
+      customer:         current_user,
+      score_service:    params[:score_service],
+      score_resolution: params[:score_resolution],
+      comment:          comment_value(params[:comment]),
     )
 
     authorize!(rating, :create?)
@@ -30,11 +31,12 @@ class CsatRatingsController < ApplicationController
 
   def serialize(rating)
     {
-      id:         rating.id,
-      ticket_id:  rating.ticket_id,
-      score:      rating.score,
-      comment:    rating.comment,
-      created_at: rating.created_at,
+      id:               rating.id,
+      ticket_id:        rating.ticket_id,
+      score_service:    rating.score_service,
+      score_resolution: rating.score_resolution,
+      comment:          rating.comment,
+      created_at:       rating.created_at,
     }
   end
 end

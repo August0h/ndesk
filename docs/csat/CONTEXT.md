@@ -1,12 +1,20 @@
 # CSAT (Satisfação do Cliente)
 
-Contexto da feature de CSAT do NDesk: o Cliente avalia o atendimento (1–5 estrelas) num popup dentro do ticket finalizado; a nota é creditada a um Atendente Avaliado e exposta a Admins (no app e via API REST). Glossário — sem detalhes de implementação.
+Contexto da feature de CSAT do NDesk: o Cliente avalia a resolução do problema e o atendimento (duas notas 1–5) num popup dentro do ticket finalizado; a avaliação é creditada a um Atendente Avaliado e exposta a Admins (no app e via API REST). Glossário — sem detalhes de implementação.
 
 ## Linguagem
 
 **Avaliação de Satisfação (CSAT)**:
-A nota de 1–5 (com comentário opcional) que um Cliente dá a um atendimento finalizado. Uma por ticket, gravada uma única vez. No código: `Ticket::SatisfactionRating`.
+O par de notas 1–5 — Nota de Resolução e Nota de Atendimento — (com comentário opcional) que um Cliente dá a um atendimento finalizado. Uma por ticket, gravada uma única vez. No código: `Ticket::SatisfactionRating`.
 _Evitar_: pesquisa, survey, feedback, NPS, "rating" genérico
+
+**Nota de Resolução**:
+A nota 1–5 que o Cliente dá à resolução do problema, primeira pergunta do popup. Nula nas Avaliações registradas antes da dimensão existir. No código: `score_resolution`.
+_Evitar_: nota do problema, score de solução
+
+**Nota de Atendimento**:
+A nota 1–5 que o Cliente dá ao atendimento em si — *como foi atendido*, em contraste com a resolução —, segunda pergunta do popup. "Atendimento" sem qualificador segue sendo a experiência toda do ticket finalizado (sentido do título do popup); as Avaliações antigas (nota única) são Notas de Atendimento (ver ADR 0003). No código: `score_service`.
+_Evitar_: score (ambíguo), nota geral
 
 **Atendente Avaliado**:
 O atendente a quem uma Avaliação é creditada. Copiado do `owner` do ticket no momento da avaliação e imutável depois — não muda se o ticket for reatribuído. É o **dono (owner) atribuído**, não quem clicou em "Fechar". No código: `agent_id`.

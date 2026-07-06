@@ -21,7 +21,7 @@ class CsatSurveysController < ApplicationController
   def scope
     rel = Ticket::SatisfactionRating.all
 
-    %i[agent_id group_id score].each do |attribute|
+    %i[agent_id group_id score_service score_resolution].each do |attribute|
       rel = rel.where(attribute => params[attribute]) if params[attribute].present?
     end
 
@@ -32,15 +32,16 @@ class CsatSurveysController < ApplicationController
 
   def serialize(rating)
     {
-      id:          rating.id,
-      ticket_id:   rating.ticket_id,
-      customer_id: rating.customer_id,
-      agent_id:    rating.agent_id,
-      agent_name:  rating.agent&.fullname,
-      group_id:    rating.group_id,
-      score:       rating.score,
-      comment:     rating.comment,
-      created_at:  rating.created_at,
+      id:               rating.id,
+      ticket_id:        rating.ticket_id,
+      customer_id:      rating.customer_id,
+      agent_id:         rating.agent_id,
+      agent_name:       rating.agent&.fullname,
+      group_id:         rating.group_id,
+      score_service:    rating.score_service,
+      score_resolution: rating.score_resolution,
+      comment:          rating.comment,
+      created_at:       rating.created_at,
     }
   end
 end
