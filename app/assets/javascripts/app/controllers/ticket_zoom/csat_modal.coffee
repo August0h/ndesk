@@ -13,6 +13,7 @@ class App.TicketZoomCsatModal extends App.ControllerModal
   constructor: ->
     super
     @ticketId = @ticket.id
+    @scores   = {}
 
   content: ->
     App.view('ticket_zoom/csat_modal')(
@@ -21,19 +22,21 @@ class App.TicketZoomCsatModal extends App.ControllerModal
 
   selectStar: (e) =>
     e.preventDefault()
-    @score = parseInt($(e.currentTarget).attr('data-value'), 10)
-    score = @score
-    @$('.js-csat-star').each ->
-      value = parseInt($(@).attr('data-value'), 10)
-      $(@).toggleClass('is-selected', value <= score)
+    $star     = $(e.currentTarget)
+    dimension = $star.attr('data-dimension')
+    value     = parseInt($star.attr('data-value'), 10)
+    @scores[dimension] = value
+    @$(".js-csat-star[data-dimension='#{dimension}']").each ->
+      starValue = parseInt($(@).attr('data-value'), 10)
+      $(@).toggleClass('is-selected', starValue <= value)
     @$('.js-csat-error').text('')
 
   onSubmit: =>
     commentMode = App.Config.get('csat_comment') or 'optional'
     comment     = @$('.js-csat-comment').val() or ''
 
-    if !@score
-      @$('.js-csat-error').text(App.i18n.translateContent('Please select a rating.'))
+    if !@scores.resolution or !@scores.service
+      @$('.js-csat-error').text(App.i18n.translateContent('Please rate both fields.'))
       return
     if commentMode is 'required' and not comment.trim()
       @$('.js-csat-error').text(App.i18n.translateContent('Please add a comment.'))
@@ -43,7 +46,7 @@ class App.TicketZoomCsatModal extends App.ControllerModal
       id:          "csat-#{@ticketId}"
       type:        'POST'
       url:         "#{@apiPath}/csat/ratings"
-      data:        JSON.stringify(ticket_id: @ticketId, score: @score, comment: comment)
+      data:        JSON.stringify(ticket_id: @ticketId, score_service: @scores.service, score_resolution: @scores.resolution, comment: comment)
       processData: true
       success: (data) =>
         @submitted = true

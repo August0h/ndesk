@@ -90,12 +90,13 @@ returns
     return if rating.nil?
 
     {
-      'score'      => rating.score,
-      'comment'    => rating.comment,
-      'agent_id'   => rating.agent_id,
-      'agent_name' => rating.agent&.fullname,
-      'group_id'   => rating.group_id,
-      'created_at' => rating.created_at,
+      'score_service'    => rating.score_service,
+      'score_resolution' => rating.score_resolution,
+      'comment'          => rating.comment,
+      'agent_id'         => rating.agent_id,
+      'agent_name'       => rating.agent&.fullname,
+      'group_id'         => rating.group_id,
+      'created_at'       => rating.created_at,
     }
   end
 end

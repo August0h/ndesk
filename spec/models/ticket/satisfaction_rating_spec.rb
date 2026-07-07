@@ -11,7 +11,7 @@ RSpec.describe Ticket::SatisfactionRating, type: :model do
   let(:ticket)   { create(:ticket, group:, customer:, owner: agent) }
 
   describe 'associations' do
-    # NOTE: the model marks ticket_id/customer_id/agent_id/score as attr_readonly.
+    # NOTE: the model marks ticket_id/customer_id/agent_id/score_service/score_resolution as attr_readonly.
     # Under Rails' load_defaults 8.0, assigning a readonly attribute on a *persisted*
     # record raises ActiveRecord::ReadonlyAttributeError. The shoulda-matchers
     # belong_to matcher mutates the FK to probe the association, so it must run
@@ -25,12 +25,25 @@ RSpec.describe Ticket::SatisfactionRating, type: :model do
   end
 
   describe 'validations' do
-    it 'requires a score' do
-      expect(build(:ticket_satisfaction_rating, score: nil)).not_to be_valid
+    it 'requires a service score' do
+      expect(build(:ticket_satisfaction_rating, score_service: nil)).not_to be_valid
     end
 
-    it 'rejects a score outside 1..5' do
-      expect(build(:ticket_satisfaction_rating, score: 6)).not_to be_valid
+    it 'rejects a service score outside 1..5' do
+      expect(build(:ticket_satisfaction_rating, score_service: 6)).not_to be_valid
+    end
+
+    it 'requires a resolution score on create' do
+      expect(build(:ticket_satisfaction_rating, score_resolution: nil)).not_to be_valid
+    end
+
+    it 'rejects a resolution score outside 1..5' do
+      expect(build(:ticket_satisfaction_rating, score_resolution: 0)).not_to be_valid
+    end
+
+    it 'keeps legacy rows (without resolution score) valid outside the create context' do
+      legacy = create(:ticket_satisfaction_rating, :legacy, ticket:, customer:)
+      expect(legacy.reload).to be_valid
     end
 
     it 'forbids a second rating for the same ticket+customer' do
@@ -41,14 +54,21 @@ RSpec.describe Ticket::SatisfactionRating, type: :model do
   end
 
   describe 'immutability (attr_readonly)' do
-    subject(:rating) { create(:ticket_satisfaction_rating, ticket:, customer:, score: 3) }
+    subject(:rating) { create(:ticket_satisfaction_rating, ticket:, customer:, score_service: 3, score_resolution: 4) }
 
     # Under load_defaults 8.0, assigning a readonly attribute on a persisted
     # record raises rather than silently ignoring the change.
-    it 'does not persist a changed score' do
+    it 'does not persist a changed service score' do
       aggregate_failures do
-        expect { rating.update(score: 1) }.to raise_error(ActiveRecord::ReadonlyAttributeError)
-        expect(rating.reload.score).to eq(3)
+        expect { rating.update(score_service: 1) }.to raise_error(ActiveRecord::ReadonlyAttributeError)
+        expect(rating.reload.score_service).to eq(3)
+      end
+    end
+
+    it 'does not persist a changed resolution score' do
+      aggregate_failures do
+        expect { rating.update(score_resolution: 1) }.to raise_error(ActiveRecord::ReadonlyAttributeError)
+        expect(rating.reload.score_resolution).to eq(4)
       end
     end
   end

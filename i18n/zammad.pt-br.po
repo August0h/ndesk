@@ -27825,8 +27825,11 @@ msgstr "∅ tempo de espera hoje"
 msgid "Rate this ticket"
 msgstr "Avalie este atendimento"
 
-msgid "How was your support?"
-msgstr "Como foi o seu atendimento?"
+msgid "How do you rate the resolution of your problem?"
+msgstr "Como você avalia a resolução do problema?"
+
+msgid "How do you rate the service?"
+msgstr "Como você avalia o atendimento?"
 
 msgid "Not now"
 msgstr "Agora não"
@@ -27834,8 +27837,8 @@ msgstr "Agora não"
 msgid "Thanks for your feedback!"
 msgstr "Obrigado pela sua avaliação!"
 
-msgid "Please select a rating."
-msgstr "Selecione uma nota."
+msgid "Please rate both fields."
+msgstr "Selecione uma nota nos dois campos."
 
 msgid "Please add a comment."
 msgstr "Adicione um comentário."

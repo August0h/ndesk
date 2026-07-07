@@ -21948,7 +21948,10 @@ msgstr ""
 msgid "Rate this ticket"
 msgstr ""
 
-msgid "How was your support?"
+msgid "How do you rate the resolution of your problem?"
+msgstr ""
+
+msgid "How do you rate the service?"
 msgstr ""
 
 msgid "Not now"
@@ -21957,7 +21960,7 @@ msgstr ""
 msgid "Thanks for your feedback!"
 msgstr ""
 
-msgid "Please select a rating."
+msgid "Please rate both fields."
 msgstr ""
 
 msgid "Please add a comment."

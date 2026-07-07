@@ -1,10 +1,20 @@
 <!-- app/assets/javascripts/app/views/ticket_zoom/csat_modal.jst.eco -->
 <div class="csat-modal">
-  <p class="csat-modal__label"><%- @T('How was your support?') %></p>
-  <div class="csat-modal__stars">
-    <% for star in [1, 2, 3, 4, 5]: %>
-      <button type="button" class="js-csat-star csat-modal__star" data-value="<%= star %>" aria-label="<%- @T('%s stars', star) %>">★</button>
-    <% end %>
+  <div class="csat-modal__group">
+    <p class="csat-modal__label" id="csat-label-resolution"><%- @T('How do you rate the resolution of your problem?') %></p>
+    <div class="csat-modal__stars" role="group" aria-labelledby="csat-label-resolution">
+      <% for star in [1, 2, 3, 4, 5]: %>
+        <button type="button" class="js-csat-star csat-modal__star" data-dimension="resolution" data-value="<%= star %>" aria-label="<%- @T('%s stars', star) %>">★</button>
+      <% end %>
+    </div>
+  </div>
+  <div class="csat-modal__group">
+    <p class="csat-modal__label" id="csat-label-service"><%- @T('How do you rate the service?') %></p>
+    <div class="csat-modal__stars" role="group" aria-labelledby="csat-label-service">
+      <% for star in [1, 2, 3, 4, 5]: %>
+        <button type="button" class="js-csat-star csat-modal__star" data-dimension="service" data-value="<%= star %>" aria-label="<%- @T('%s stars', star) %>">★</button>
+      <% end %>
+    </div>
   </div>
   <% if @commentMode isnt 'off': %>
     <label class="csat-modal__comment-label" for="csat-comment"><%- @T('Comment') %></label>

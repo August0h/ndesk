@@ -13,7 +13,7 @@ RSpec.describe 'Ticket payload: embedded satisfaction', :aggregate_failures, typ
   before { Setting.set('csat_integration', true) }
 
   context 'when the ticket has a rating' do
-    before { create(:ticket_satisfaction_rating, ticket:, customer:, score: 4, comment: 'Ótimo') }
+    before { create(:ticket_satisfaction_rating, ticket:, customer:, score_service: 4, score_resolution: 5, comment: 'Ótimo') }
 
     it 'embeds the satisfaction object on the expanded GET show' do
       authenticated_as(admin)
@@ -21,11 +21,12 @@ RSpec.describe 'Ticket payload: embedded satisfaction', :aggregate_failures, typ
       expect(response).to have_http_status(:ok)
       sat = json_response['satisfaction']
       expect(sat).to include(
-        'score'      => 4,
-        'comment'    => 'Ótimo',
-        'agent_id'   => agent.id,
-        'agent_name' => agent.fullname,
-        'group_id'   => group.id,
+        'score_service'    => 4,
+        'score_resolution' => 5,
+        'comment'          => 'Ótimo',
+        'agent_id'         => agent.id,
+        'agent_name'       => agent.fullname,
+        'group_id'         => group.id,
       )
       expect(sat['created_at']).to be_present
     end
@@ -34,7 +35,8 @@ RSpec.describe 'Ticket payload: embedded satisfaction', :aggregate_failures, typ
       authenticated_as(admin)
       get "/api/v1/tickets/#{ticket.id}", as: :json
       expect(response).to have_http_status(:ok)
-      expect(json_response.dig('satisfaction', 'score')).to eq(4)
+      expect(json_response.dig('satisfaction', 'score_service')).to eq(4)
+      expect(json_response.dig('satisfaction', 'score_resolution')).to eq(5)
       expect(json_response.dig('satisfaction', 'agent_name')).to eq(agent.fullname)
     end
 
@@ -43,7 +45,19 @@ RSpec.describe 'Ticket payload: embedded satisfaction', :aggregate_failures, typ
       get '/api/v1/tickets', as: :json
       row = json_response.find { |t| t['id'] == ticket.id }
       expect(row).to be_present
-      expect(row.dig('satisfaction', 'score')).to eq(4)
+      expect(row.dig('satisfaction', 'score_service')).to eq(4)
+    end
+  end
+
+  context 'when the ticket has a legacy rating (no resolution score)' do
+    before { create(:ticket_satisfaction_rating, :legacy, ticket:, customer:, score_service: 3) }
+
+    it 'returns score_resolution as null' do
+      authenticated_as(admin)
+      get "/api/v1/tickets/#{ticket.id}", as: :json
+      expect(json_response.dig('satisfaction', 'score_service')).to eq(3)
+      expect(json_response['satisfaction']).to have_key('score_resolution')
+      expect(json_response['satisfaction']['score_resolution']).to be_nil
     end
   end
 
