@@ -65,6 +65,11 @@ class NkeyLifecycleController < ApplicationController
   end
 
   def with_user(sub)
+    # A legit sub is a String (the OIDC subject). A hostile SIGNED payload can send a
+    # Hash/Array here — coerce to a String so the lookup can only miss, never blow up
+    # querying a string column with a non-scalar (that raises → 500, breaking the
+    # never-500 contract). QA finding 2026-07-12.
+    sub = sub.to_s
     return if sub.blank?
 
     authorization = Authorization.find_by(provider: 'openid_connect', uid: sub)
