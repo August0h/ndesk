@@ -26,6 +26,19 @@ RSpec.describe 'nkey lifecycle webhook', :aggregate_failures, type: :request do
     }
   end
 
+  # A rack session row keyed on a user id, matching how destroy_sessions_of reads
+  # them (`session.data['user_id']`). String key on purpose — that is the stored shape.
+  def make_session(user_id)
+    ActiveRecord::SessionStore::Session.create!(
+      session_id: SecureRandom.hex(16),
+      data:       { 'user_id' => user_id }
+    )
+  end
+
+  def session_exists?(session)
+    ActiveRecord::SessionStore::Session.exists?(id: session.id)
+  end
+
   describe 'authentication contract' do
     it 'rejects a missing signature with 401' do
       post '/nkey/lifecycle', params: '{}', headers: { 'CONTENT_TYPE' => 'application/json' }
@@ -47,13 +60,26 @@ RSpec.describe 'nkey lifecycle webhook', :aggregate_failures, type: :request do
       signed_post({ event_type: 'user.deactivated', aggregateID: 'sub-1' })
       expect(response).to have_http_status(:not_found)
     end
+
+    it 'checks the dark-mode gate BEFORE the signature (off + no signature → 404, not 401)' do
+      Setting.set('nkey_integration', false)
+      post '/nkey/lifecycle', params: '{}', headers: { 'CONTENT_TYPE' => 'application/json' }
+      expect(response).to have_http_status(:not_found)
+    end
   end
 
   describe 'user.deactivated (Bloquear) → soft-disable' do
-    it 'deactivates the user and destroys their sessions' do
+    it 'deactivates the user and destroys ONLY their sessions' do
+      target_session = make_session(user.id)
+      other_user     = create(:customer)
+      other_session  = make_session(other_user.id)
+
       signed_post({ event_type: 'user.deactivated', aggregateID: 'sub-1' })
+
       expect(response).to have_http_status(:ok)
       expect(user.reload.active).to be(false)
+      expect(session_exists?(target_session)).to be(false)
+      expect(session_exists?(other_session)).to be(true)
     end
 
     it 'no-ops an unknown sub with 200' do
@@ -88,10 +114,12 @@ RSpec.describe 'nkey lifecycle webhook', :aggregate_failures, type: :request do
   end
 
   describe 'user.removed (Remover) → delete or tombstone' do
-    it 'deletes a user without references' do
+    it 'deletes a user without references and drops their sessions' do
+      target_session = make_session(user.id)
       signed_post({ event_type: 'user.removed', aggregateID: 'sub-1' })
       expect(response).to have_http_status(:ok)
       expect(User.find_by(id: user.id)).to be_nil
+      expect(session_exists?(target_session)).to be(false)
     end
 
     it 'tombstones a ticket-holding user: frees the email, keeps the name, unlinks' do
@@ -104,6 +132,20 @@ RSpec.describe 'nkey lifecycle webhook', :aggregate_failures, type: :request do
       expect(reloaded.active).to be(false)
       expect(reloaded.firstname).to eq(original_firstname)
       expect(Authorization.find_by(uid: 'sub-1', provider: 'openid_connect')).to be_nil
+    end
+
+    it 'is atomic: a failure mid-removal rolls back the auth severing so the event is re-processable' do
+      create(:ticket, customer: user, group: Group.first || create(:group)) # forces the tombstone path
+      allow_any_instance_of(User).to receive(:update!).and_raise(ActiveRecord::RecordInvalid)
+
+      signed_post({ event_type: 'user.removed', aggregateID: 'sub-1' })
+
+      expect(response).not_to have_http_status(:ok)
+      # The openid_connect Authorization must survive the rollback — otherwise a
+      # Zitadel retry would find no auth and silently 200-no-op, stranding the
+      # user active and un-offboarded.
+      expect(Authorization.find_by(uid: 'sub-1', provider: 'openid_connect')).to be_present
+      expect(user.reload.active).to be(true)
     end
   end
 

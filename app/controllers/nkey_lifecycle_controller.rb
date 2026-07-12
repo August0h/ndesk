@@ -86,16 +86,21 @@ class NkeyLifecycleController < ApplicationController
   # name kept for ticket attribution, Authorization unlinked, all auth blocked.
   def remove(user)
     sub = Authorization.find_by(user: user, provider: 'openid_connect')&.uid
-    # Sever the OIDC link up front: it is discarded in BOTH outcomes (a hard
-    # delete cascades it, a tombstone unlinks it), so the user's own auth must
-    # NOT count as a reference that would wrongly force the tombstone path.
-    Authorization.where(user: user, provider: 'openid_connect').destroy_all
+    # Atomic: the OIDC link is severed BEFORE the delete/tombstone so the user's
+    # own auth can't count as a reference. But that severing must commit only if
+    # the whole removal succeeds — otherwise a mid-way failure strands the user
+    # (auth gone, still active) and Zitadel's retry, finding no auth, silently
+    # 200-no-ops. The transaction keeps the event re-processable on any failure.
+    ActiveRecord::Base.transaction do
+      Authorization.where(user: user, provider: 'openid_connect').destroy_all
 
-    if removable?(user)
-      user.destroy!
-    else
-      user.update!(email: "removed-#{sub}@nkey.invalid", active: false)
-      destroy_sessions_of(user)
+      if removable?(user)
+        destroy_sessions_of(user) # sessions aren't FK-linked; drop them explicitly
+        user.destroy!
+      else
+        user.update!(email: "removed-#{sub}@nkey.invalid", active: false)
+        destroy_sessions_of(user)
+      end
     end
   end
 
