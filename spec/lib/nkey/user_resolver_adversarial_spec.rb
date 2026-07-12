@@ -78,13 +78,19 @@ RSpec.describe Nkey::UserResolver, :aggregate_failures do
   end
 
   describe 'privilege probe (L16) — email collides with an AGENT account in the same org' do
-    it 'documents that adoption attaches to the existing user with roles UNTOUCHED' do
-      agent = create(:agent, email: 'ana@cliente.com', organization: organization)
-      result = resolve
-      expect(result).to eq(agent)
-      # roles are deliberately not rewritten by nkey — this pins the behavior so any
-      # change is a conscious decision (whole-branch review flagged the interaction).
-      expect(result.roles.pluck(:name)).to include('Agent')
+    it 'FAILS LOUD — never auto-attaches a client login to an agent account (QA hardening F1)' do
+      create(:agent, email: 'ana@cliente.com', organization: organization)
+      expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
+    end
+
+    it 'also refuses to adopt an admin account by email' do
+      create(:admin, email: 'ana@cliente.com', organization: organization)
+      expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
+    end
+
+    it 'still adopts a lowest-privilege Customer collision (normal path unaffected)' do
+      cust = create(:customer, email: 'ana@cliente.com', organization: organization)
+      expect(resolve).to eq(cust)
     end
   end
 

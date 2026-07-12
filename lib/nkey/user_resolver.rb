@@ -67,6 +67,14 @@ module Nkey
         raise Nkey::LoginDenied, __('Não foi possível vincular seu email com segurança. Entre em contato com o suporte da New Byte.')
       end
 
+      # QA hardening (F1, 2026-07-12): the nkey door is CLIENTS-ONLY and confers only
+      # Customer. Never silently attach a client login to an existing Agent/Admin
+      # account that merely shares the email — a privileged collision fails loud
+      # rather than handing the login elevated access. Adopt only lowest-privilege.
+      if user.permissions?('ticket.agent') || user.permissions?('admin')
+        raise Nkey::LoginDenied, __('Não foi possível vincular seu email com segurança. Entre em contato com o suporte da New Byte.')
+      end
+
       user.organization = organization if user.organization_id.blank?
       user.active = true if !user.active # Zitadel just vouched for them
       user.save! if user.changed?
