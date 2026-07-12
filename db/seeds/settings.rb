@@ -2118,6 +2118,18 @@ Setting.create_if_not_exists(
 )
 
 Setting.create_if_not_exists(
+  title:       __('nkey integration'),
+  name:        'nkey_integration',
+  area:        'Integration::Nkey',
+  description: __('Enables the nkey (New Byte unified identity) rules on the OpenID Connect login: staff deny, tenant resolution from the token, tenant-scoped email link, JIT customer provisioning and lazy reactivation. The lifecycle webhook is only active when this is on.'),
+  options:     { form: [{ display: '', null: true, name: 'nkey_integration', tag: 'boolean',
+                          options: { true => 'yes', false => 'no' } }] },
+  state:       false,
+  preferences: { permission: ['admin.security'] },
+  frontend:    false
+)
+
+Setting.create_if_not_exists(
   title:       __('Minimum length'),
   name:        'password_min_size',
   area:        'Security::Password',
