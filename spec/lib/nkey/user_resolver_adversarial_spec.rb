@@ -94,6 +94,18 @@ RSpec.describe Nkey::UserResolver, :aggregate_failures do
       expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
     end
 
+    it 'refuses a non-admin privileged role (chat.agent) — fail-closed allow-list, not a deny-list' do
+      privileged = create(:role, permission_names: %w[chat.agent])
+      create(:user, email: 'ana@cliente.com', organization: organization, roles: [privileged])
+      expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
+    end
+
+    it 'refuses an account with no effective permissions (no positive Customer signal → fail closed)' do
+      permissionless = create(:role, permission_names: [])
+      create(:user, email: 'ana@cliente.com', organization: organization, roles: [permissionless])
+      expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
+    end
+
     it 'still adopts a lowest-privilege Customer collision (normal path unaffected)' do
       cust = create(:customer, email: 'ana@cliente.com', organization: organization)
       expect(resolve).to eq(cust)

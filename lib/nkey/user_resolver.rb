@@ -67,13 +67,16 @@ module Nkey
         raise Nkey::LoginDenied, __('Não foi possível vincular seu email com segurança. Entre em contato com o suporte da New Byte.')
       end
 
-      # QA hardening (F1, 2026-07-12): the nkey door is CLIENTS-ONLY and confers only
-      # Customer. Never silently attach a client login to an existing Agent/Admin
-      # account that merely shares the email — a privileged collision fails loud
-      # rather than handing the login elevated access. Adopt only lowest-privilege.
-      # 'admin.*' (prefix form) catches granular admin sub-permissions (e.g. a role
-      # holding only admin.user) that the exact 'admin' query does not.
-      if user.permissions?('ticket.agent') || user.permissions?('admin') || user.permissions?('admin.*')
+      # QA hardening (F1, ratified 2026-07-12): the nkey door is CLIENTS-ONLY and
+      # confers only Customer. Adopt only a provably Customer-only account — a
+      # collision with any privileged OR unknown-role account fails loud rather than
+      # handing the login elevated access. This is a **fail-closed allow-list**, not
+      # a deny-list: a deny-list must enumerate every privileged permission and drifts
+      # as new ones appear (agent/admin were caught, but chat.agent / report / a future
+      # admin.* would slip). The allow-list is the exact Customer role surface —
+      # `ticket.customer` + the granular `user_preferences.*` self-service perms — so
+      # anything else, or an empty permission set, is denied.
+      if !customer_only?(user)
         raise Nkey::LoginDenied, __('Não foi possível vincular seu email com segurança. Entre em contato com o suporte da New Byte.')
       end
 
@@ -81,6 +84,15 @@ module Nkey
       user.active = true if !user.active # Zitadel just vouched for them
       user.save! if user.changed?
       user
+    end
+
+    # True only when EVERY effective permission is Customer-safe (and there is at
+    # least one — an empty set fails closed). Customer-safe = the exact Customer role
+    # surface: `ticket.customer` and the granular `user_preferences.*` perms. Bare
+    # `user_preferences` (the agent-held parent) is deliberately NOT safe.
+    def customer_only?(user)
+      names = user.permissions.pluck(:name)
+      names.present? && names.all? { |n| n == 'ticket.customer' || n.start_with?('user_preferences.') }
     end
 
     def jit_create(organization)
