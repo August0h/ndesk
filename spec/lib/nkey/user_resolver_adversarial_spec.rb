@@ -88,6 +88,12 @@ RSpec.describe Nkey::UserResolver, :aggregate_failures do
       expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
     end
 
+    it 'also refuses a granular-admin account (admin.user without full admin or ticket.agent)' do
+      granular = create(:role, permission_names: %w[admin.user])
+      create(:user, email: 'ana@cliente.com', organization: organization, roles: [granular])
+      expect { resolve }.to raise_error(Nkey::LoginDenied, %r{vincular seu email})
+    end
+
     it 'still adopts a lowest-privilege Customer collision (normal path unaffected)' do
       cust = create(:customer, email: 'ana@cliente.com', organization: organization)
       expect(resolve).to eq(cust)

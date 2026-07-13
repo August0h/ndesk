@@ -71,7 +71,9 @@ module Nkey
       # Customer. Never silently attach a client login to an existing Agent/Admin
       # account that merely shares the email — a privileged collision fails loud
       # rather than handing the login elevated access. Adopt only lowest-privilege.
-      if user.permissions?('ticket.agent') || user.permissions?('admin')
+      # 'admin.*' (prefix form) catches granular admin sub-permissions (e.g. a role
+      # holding only admin.user) that the exact 'admin' query does not.
+      if user.permissions?('ticket.agent') || user.permissions?('admin') || user.permissions?('admin.*')
         raise Nkey::LoginDenied, __('Não foi possível vincular seu email com segurança. Entre em contato com o suporte da New Byte.')
       end
 
