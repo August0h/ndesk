@@ -98,7 +98,11 @@ QUnit.test('eventos: mudanças disparam taskbarCollections:change', assert => {
 
 // ===== Task 2: persistência e reconciliação =====
 
-QUnit.module('TaskbarCollections: persistência')
+QUnit.module('TaskbarCollections: persistência', {
+  afterEach: () => {
+    sinon.restore()
+  },
+})
 
 QUnit.test('savePush envia PUT /users/preferences com o documento', assert => {
   App.TaskbarCollections.init({ force: true, offline: false, collections: [] })
@@ -113,7 +117,6 @@ QUnit.test('savePush envia PUT /users/preferences com o documento', assert => {
   const payload = JSON.parse(args.data)
   assert.equal(payload.taskbar_collections.length, 1)
   assert.equal(payload.taskbar_collections[0].id, c1.id)
-  stub.restore()
 })
 
 QUnit.test('offline: flush não dispara Ajax', assert => {
@@ -122,7 +125,6 @@ QUnit.test('offline: flush não dispara Ajax', assert => {
   App.TaskbarCollections.create(['Ticket-1'])
   App.TaskbarCollections.flush()
   assert.notOk(stub.called, 'nenhum request em modo offline')
-  stub.restore()
 })
 
 QUnit.test('reconcile descarta keys órfãs e mata coleção vazia', assert => {

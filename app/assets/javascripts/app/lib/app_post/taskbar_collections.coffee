@@ -185,5 +185,6 @@ class App.TaskbarCollectionsSingleton
       data:        JSON.stringify(taskbar_collections: @collections)
       processData: true
       error:       (xhr, statusText, error) ->
+        return if statusText is 'abort'
         App.Log.error('TaskbarCollections', statusText, error, url)
     )
