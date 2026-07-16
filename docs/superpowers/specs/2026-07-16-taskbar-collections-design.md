@@ -24,6 +24,9 @@ tela. No código: **`TaskbarCollections`** / **`taskbar_collections`** (o prefix
   aba fechada (vira outra feature — favoritos/bookmarks).
 - **Qualquer tipo de Aba pode entrar em Coleção** (ticket, usuário, organização,
   rascunho). Rejeitado: restringir a tickets (regra por tipo sem ganho real).
+- **Sem gate de permissão**: qualquer usuário logado (atendente ou Cliente) usa
+  Coleções — organização genérica de abas, nenhum dado novo exposto. Rejeitado:
+  restringir a `ticket.agent`.
 - **Nome editável na criação**: ao criar a Coleção, o cabeçalho abre com input focado
   (Enter confirma; Esc/blur mantém o padrão "Coleção N"). Renomear depois pelo menu.
   Rejeitados: só nome automático; nome inteligente derivado do cliente/organização.
@@ -69,6 +72,11 @@ estrutural, o widget achata a ordem visual (top→bottom, entrando nas Coleçõe
 `App.TaskManager.reorder(keys)` existente. Outros clientes (Vue desktop/mobile) seguem
 vendo uma lista plana ordenada e coerente.
 
+A renderização **tolera prios intercalados** (outro cliente pode reordenar sem conhecer
+Coleções): os membros são sempre juntados na âncora. O init **não grava ordem de volta**
+— carregar a tela não tem efeito colateral de escrita; os prios só são normalizados na
+próxima mudança estrutural feita na UI clássica.
+
 **Reconciliação** (a Coleção segue as Abas):
 
 - *No init da taskbar*: descartar `keys` sem Aba correspondente; remover Coleções vazias;
@@ -89,8 +97,8 @@ Cada item tem três zonas de drop:
 Com Coleções existentes:
 
 - O **cabeçalho** segue o mesmo modelo de três zonas para uma Aba arrastada: miolo
-  (mesmo recolhido) → entra no **fim** da Coleção; bordas → reordena a Aba **em volta**
-  da Coleção.
+  (mesmo recolhido) → entra no **fim** da Coleção, e a Coleção **expande** para mostrar
+  onde a Aba caiu; bordas → reordena a Aba **em volta** da Coleção.
 - Soltar **entre membros** (Coleção expandida) → entra naquela posição.
 - Arrastar membro **para fora** → sai da Coleção (esvaziou → some).
 - Arrastar o **cabeçalho** → move a Coleção inteira como unidade na lista raiz.
@@ -140,9 +148,10 @@ Comportamentos de componente:
 
 ## Comportamento fino
 
-- **Aba ativa em Coleção recolhida**: ativar uma Aba de Coleção recolhida (busca,
-  navegação direta) expande a Coleção. Recolher manualmente a Coleção da Aba ativa move
-  o destaque de "ativo" para o cabeçalho.
+- **Expansão automática é persistida** (`collapsed: false` gravado no documento) e
+  acontece em dois gatilhos: ativar uma Aba que está em Coleção recolhida (busca,
+  navegação direta) e soltar qualquer Aba no cabeçalho recolhido. Recolher manualmente a
+  Coleção da Aba ativa move o destaque de "ativo" para o cabeçalho.
 - **Notify em Coleção recolhida**: qualquer membro com bolinha → indicador no cabeçalho.
   Expandida, só o membro mostra (como hoje).
 - **Nome padrão**: "Coleção N" com N = menor número livre entre os padrões existentes.
