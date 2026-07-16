@@ -3,8 +3,13 @@
 ## Branch e PR
 
 - **Branch de producao**: `newbyte-stable` (NÃO é `main` nem `master`)
-- Toda PR deve ser aberta contra `newbyte-stable`
+- Commit livre é permitido (liberado pelo CTO) — não é obrigatório passar por PR **por commit**
+- **Mas SEMPRE na branch da feature — commit/push direto na `newbyte-stable` é PROIBIDO**
+- **Push também é livre na branch da feature** — push NÃO abre PR; PR é sempre uma ação
+  explícita e separada (confirmado pelo CTO em 2026-07-16)
+- **A PR só deve ser aberta no final, quando o usuário pedir explicitamente**
 - Criar branch com prefixo descritivo: `feat/`, `fix/`, `chore/`
+- A PR (quando pedida) é aberta contra `newbyte-stable`
 - Se o `gh pr create` falhar via GraphQL, usar a API REST:
   ```
   gh api repos/newbytesolucoesdigitais/ndesk/pulls \
@@ -54,8 +59,14 @@ Estes arquivos existem no workspace mas nao devem ser commitados:
 ## Restricoes de Git
 
 - **NUNCA** fazer operacoes destrutivas (pull, reset --hard, push --force, checkout --) sem aprovacao explicita do usuario
-- **NUNCA** fazer push direto na `newbyte-stable` - sempre via PR
+- **NUNCA** commitar ou fazer push direto na `newbyte-stable` — trabalho sempre na branch da feature
 - Preferir commits novos a amend
+
+## Frontend — SOMENTE o app legacy
+
+- **Todo trabalho de UI é no app legacy** (`app/assets/javascripts` e `app/assets/stylesheets`) — CoffeeScript/Spine.js, servido na raiz `/`.
+- **NUNCA trabalhar nos apps Vue** (`app/frontend/apps/desktop` e `app/frontend/apps/mobile`). Eles são código oficial do upstream Zammad (a migração do desktop pra Vue, servida em `/desktop` e `/mobile`) e o NDesk **não** os usa nem customiza.
+- Ignorar as mencoes aos apps Vue no `AGENTS.md` / CLAUDE.md — sao boilerplate herdado do upstream.
 
 ## Compatibilidade de Browser
 
