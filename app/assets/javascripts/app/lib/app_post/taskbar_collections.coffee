@@ -146,6 +146,7 @@ class App.TaskbarCollectionsSingleton
     @changed()
 
   reconcile: (existingKeys) =>
+    return if !existingKeys
     changed = false
     for collection in clone(@collections)
       keys = _.filter(collection.keys, (key) -> _.contains(existingKeys, key))
@@ -175,10 +176,14 @@ class App.TaskbarCollectionsSingleton
 
   savePush: =>
     return if @offline
+    App.Delay.clear('taskbar-collections-save', 'task')
+    url = "#{App.Config.get('api_path')}/users/preferences"
     App.Ajax.request(
       id:          'taskbar_collections_save'
       type:        'PUT'
-      url:         "#{App.Config.get('api_path')}/users/preferences"
+      url:         url
       data:        JSON.stringify(taskbar_collections: @collections)
       processData: true
+      error:       (xhr, statusText, error) ->
+        App.Log.error('TaskbarCollections', statusText, error, url)
     )
