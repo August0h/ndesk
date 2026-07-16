@@ -178,8 +178,87 @@ QUnit.test('abas em coleção sobrevivem à limpeza automática', assert => {
     assert.notOk(App.TaskManager.get('CleanC'), 'aba solta mais antiga fechou')
     App.Config.set('ui_task_mananger_max_task_count', maxBefore)
     App.TaskManager.tasksAutoCleanupDelayTime(12000)
+    // higiene: execute() cria registros App.Taskbar mesmo em offlineModus — sem
+    // reset(), CleanA/CleanB ficam na collection em memória e o tasksInitial()
+    // dos testes de widget re-executa essas abas, poluindo as contagens de âncoras
+    App.TaskManager.reset()
     done()
   }, 600)
+})
+
+// ===== Task 4: renderização em dois níveis =====
+
+QUnit.module('TaskbarWidget: coleções')
+
+QUnit.test('render, recolher e expansão por ativação', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content"></div><div id="taskbar-w1" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  new App.TaskbarWidget({ el: $('#taskbar-w1') })
+  App.TaskManager.execute({ key: 'W1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'W2', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'W3', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    assert.equal($('#taskbar-w1 > a').length, 3, '3 abas soltas no nível raiz')
+
+    App.TaskbarCollections.create(['W1', 'W3'])
+    assert.equal($('#taskbar-w1 > .js-collection').length, 1, 'container da coleção')
+    assert.equal($('#taskbar-w1 .js-collection-items > a').length, 2, '2 membros dentro')
+    assert.equal($('#taskbar-w1 > a').length, 1, 'só W2 solta')
+    assert.equal($('#taskbar-w1 .js-collection-name').text(), 'Collection 1')
+    assert.equal($('#taskbar-w1 .js-collection-count').text(), '2')
+    assert.equal($('#taskbar-w1 .js-collection-items > a').first().data('key'), 'W1', 'ordem da coleção respeitada')
+
+    $('#taskbar-w1 .js-collection-header').trigger('click')
+    assert.ok($('#taskbar-w1 .js-collection').hasClass('is-collapsed'), 'clique no cabeçalho recolhe')
+
+    App.TaskManager.execute({ key: 'W3', controller: 'TestController1', params: {}, show: true, persistent: false })
+    setTimeout(() => {
+      assert.notOk($('#taskbar-w1 .js-collection').hasClass('is-collapsed'), 'ativação de membro expande (persistido)')
+      assert.notOk(App.TaskbarCollections.get(App.TaskbarCollections.collectionFor('W3').id).collapsed, 'collapsed=false no documento')
+      assert.ok($('#taskbar-w1 .js-collection').hasClass('is-active'), 'cabeçalho reflete membro ativo')
+      done()
+    }, 200)
+  }, 300)
+})
+
+QUnit.test('fechar aba de coleção remove do documento; coleção vazia some do DOM', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content2"></div><div id="taskbar-w2" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content2'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  new App.TaskbarWidget({ el: $('#taskbar-w2') })
+  App.TaskManager.execute({ key: 'X1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'X2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    App.TaskbarCollections.create(['X1', 'X2'])
+    App.TaskManager.remove('X1')
+    setTimeout(() => {
+      assert.deepEqual(App.TaskbarCollections.collectionFor('X2').keys, ['X2'], 'documento reconciliado no fechamento')
+      App.TaskManager.remove('X2')
+      setTimeout(() => {
+        assert.equal($('#taskbar-w2 .js-collection').length, 0, 'coleção vazia sumiu do DOM')
+        assert.equal(App.TaskbarCollections.all().length, 0, 'e do documento')
+        done()
+      }, 200)
+    }, 200)
+  }, 300)
+})
+
+// regressão: taskInit dispara no reset() do logout com lista vazia — o documento
+// NÃO pode ser reconciliado/apagado nesse caminho
+QUnit.test('logout (TaskManager.reset) não toca o documento de coleções', assert => {
+  $('#qunit').append('<div id="tw-content2b"></div><div id="taskbar-w2b" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content2b'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  new App.TaskbarWidget({ el: $('#taskbar-w2b') })
+  App.TaskbarCollections.create(['Ticket-1', 'Ticket-2'])
+  App.TaskManager.reset()
+  assert.equal(App.TaskbarCollections.all().length, 1, 'documento intacto após reset')
+  assert.equal($('#taskbar-w2b .js-collection').length, 0, 'nada renderizado (sem abas vivas)')
 })
 
 }
