@@ -154,4 +154,32 @@ QUnit.test('reconcile sem argumento é no-op (guard)', assert => {
   assert.equal(App.TaskbarCollections.all().length, 1, 'documento intacto')
 })
 
+// ===== Task 3: auto-limpeza protege abas em Coleção =====
+
+QUnit.module('TaskbarCollections: auto-limpeza')
+
+QUnit.test('abas em coleção sobrevivem à limpeza automática', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="cleanup-content"></div>')
+  App.TaskManager.init({ el: $('#cleanup-content'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const maxBefore = App.Config.get('ui_task_mananger_max_task_count')
+  App.Config.set('ui_task_mananger_max_task_count', 2)
+  App.TaskManager.tasksAutoCleanupDelayTime(100)
+
+  App.TaskManager.execute({ key: 'CleanA', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'CleanB', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'CleanC', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskbarCollections.create(['CleanA', 'CleanB'])
+
+  setTimeout(() => {
+    assert.ok(App.TaskManager.get('CleanA'), 'membro de coleção protegido')
+    assert.ok(App.TaskManager.get('CleanB'), 'membro de coleção protegido')
+    assert.notOk(App.TaskManager.get('CleanC'), 'aba solta mais antiga fechou')
+    App.Config.set('ui_task_mananger_max_task_count', maxBefore)
+    App.TaskManager.tasksAutoCleanupDelayTime(12000)
+    done()
+  }, 600)
+})
+
 }
