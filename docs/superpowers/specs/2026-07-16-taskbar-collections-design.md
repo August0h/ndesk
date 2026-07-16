@@ -28,7 +28,8 @@ tela. No código: **`TaskbarCollections`** / **`taskbar_collections`** (o prefix
   Coleções — organização genérica de abas, nenhum dado novo exposto. Rejeitado:
   restringir a `ticket.agent`.
 - **Nome editável na criação**: ao criar a Coleção, o cabeçalho abre com input focado
-  (Enter confirma; Esc/blur mantém o padrão "Coleção N"). Renomear depois pelo menu.
+  (Enter/blur confirmam o digitado; Esc mantém o padrão "Coleção N"). Renomear depois
+  pelo menu.
   Rejeitados: só nome automático; nome inteligente derivado do cliente/organização.
 - **Cabeçalho com menu de contexto (⋯)**: clicar no cabeçalho recolhe/expande; o ⋯
   (hover) abre menu com **Renomear**, **Desfazer coleção** e **Fechar todas as abas**.

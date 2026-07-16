@@ -25,8 +25,12 @@ de menor `prio`.
 
 ## Consequências
 
-- **Reconciliação é client-side**: no init da taskbar e no fechamento de Aba, keys
-  órfãs são descartadas e Coleção vazia some. O servidor nunca valida o documento.
+- **Reconciliação é client-side**: no init da taskbar (evento `taskbar:init`, do login)
+  e no fechamento de Aba, keys órfãs são descartadas e Coleção vazia some. O servidor
+  nunca valida o documento. **Nunca reconciliar no logout** (`taskInit` do `reset()`,
+  lista de Abas já vazia) — reconciliar ali apagaria o documento inteiro. Como logout →
+  login não recarrega a página, o documento é relido da sessão a cada login (cobre troca
+  de usuário no mesmo browser).
 - **Last-write-wins**: edição simultânea em dois dispositivos sobrescreve o documento
   inteiro (dentro da chave `taskbar_collections`). Aceito para organização pessoal.
 - **Outros clientes (Vue/mobile) não conhecem Coleções** e podem intercalar os prios ao

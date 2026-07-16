@@ -139,13 +139,14 @@ QUnit.test('dissolve e setKeys', assert => {
 
 QUnit.test('eventos: mudanças disparam taskbarCollections:change', assert => {
   let count = 0
-  const sub = App.Event.bind('taskbarCollections:change', () => count++)
+  const handler = () => count++
+  App.Event.bind('taskbarCollections:change', handler)
   const c1 = App.TaskbarCollections.create(['Ticket-1'])
   App.TaskbarCollections.rename(c1.id, 'X')
   App.TaskbarCollections.toggleCollapsed(c1.id)
   App.TaskbarCollections.dissolve(c1.id)
   assert.equal(count, 4, 'create + rename + toggle + dissolve')
-  App.Event.unbind('taskbarCollections:change', sub)
+  App.Event.unbind('taskbarCollections:change', handler)
 })
 
 }
@@ -338,8 +339,6 @@ class App.TaskbarCollectionsSingleton
 
   savePush: =>
     return if @offline
-    preferences = App.Session.get('preferences') || {}
-    preferences.taskbar_collections = @collections
     App.Ajax.request(
       id:          'taskbar_collections_save'
       type:        'PUT'
@@ -353,6 +352,13 @@ Notas para o executor:
 - `clone()` é helper global do app legacy (usado em `task_manager/singleton.coffee`).
 - `App.i18n.translateInline('Collection %s', n)` substitui `%s` — sem tradução carregada (QUnit) retorna `Collection 1`.
 - O `reconcile` re-busca a coleção viva por id porque itera sobre um clone.
+- NÃO tocar em `App.Session.get('preferences')` — retorna referência direta ao registro
+  de `App.User` e o comentário em `session.coffee:8` proíbe mutação. O documento é
+  recarregado da sessão no login via `taskbar:init` (Task 4); durante a sessão o
+  singleton é a única fonte da verdade.
+- O delay do save usa level `'task'` de propósito: `reset()` do logout faz
+  `App.Delay.clearLevel('task')` ANTES de qualquer evento, cancelando save pendente —
+  logout nunca grava.
 
 - [ ] **Step 1.4: Rodar e ver passar**
 
@@ -422,10 +428,11 @@ QUnit.test('reconcile sem mudança não dispara evento', assert => {
   App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
   App.TaskbarCollections.create(['Ticket-1'])
   let count = 0
-  const sub = App.Event.bind('taskbarCollections:change', () => count++)
+  const handler = () => count++
+  App.Event.bind('taskbarCollections:change', handler)
   App.TaskbarCollections.reconcile(['Ticket-1', 'Ticket-2'])
   assert.equal(count, 0, 'nada mudou, nada dispara')
-  App.Event.unbind('taskbarCollections:change', sub)
+  App.Event.unbind('taskbarCollections:change', handler)
 })
 ```
 
@@ -485,7 +492,7 @@ QUnit.test('abas em coleção sobrevivem à limpeza automática', assert => {
 
 - [ ] **Step 3.2: Rodar e ver falhar**
 
-Recarregue a suíte. Esperado: **FALHA** — `CleanA`/`CleanB` também são fechadas (guard ainda não existe). Obs.: a limpeza fecha da mais antiga para a mais nova até `count <= max`, então sem o guard ela fecha `CleanA` e `CleanB` (as duas primeiras não-ativas).
+Recarregue a suíte. Esperado: **FALHA** — sem o guard, a limpeza fecha `CleanA` (a mais antiga não-ativa; com `count` de volta a 2 ≤ max ela para aí), quebrando o assert de que `CleanA` sobrevive. Com o guard, ela pula `CleanA`/`CleanB` e fecha `CleanC`.
 
 - [ ] **Step 3.3: Implementar o guard**
 
@@ -595,7 +602,26 @@ QUnit.test('fechar aba de coleção remove do documento; coleção vazia some do
     }, 200)
   }, 300)
 })
+
+// regressão: taskInit dispara no reset() do logout com lista vazia — o documento
+// NÃO pode ser reconciliado/apagado nesse caminho
+QUnit.test('logout (TaskManager.reset) não toca o documento de coleções', assert => {
+  $('#qunit').append('<div id="tw-content2b"></div><div id="taskbar-w2b" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content2b'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  new App.TaskbarWidget({ el: $('#taskbar-w2b') })
+  App.TaskbarCollections.create(['Ticket-1', 'Ticket-2'])
+  App.TaskManager.reset()
+  assert.equal(App.TaskbarCollections.all().length, 1, 'documento intacto após reset')
+  assert.equal($('#taskbar-w2b .js-collection').length, 0, 'nada renderizado (sem abas vivas)')
+})
 ```
+
+Nota de sequência dos testes: `App.TaskManager.init({force: true})` roda `tasksInitial()`,
+que dispara `taskbar:init` — e widgets de testes anteriores (nunca liberados) forçam um
+reload do documento a partir da sessão vazia do QUnit. Por isso **todo teste re-inita
+`App.TaskbarCollections` DEPOIS do `App.TaskManager.init`**, como os snippets já fazem —
+manter essa ordem em testes novos.
 
 - [ ] **Step 4.2: Rodar e ver falhar**
 
@@ -663,13 +689,26 @@ class App.TaskbarWidget extends App.CollectionController
     )
 
     # bind to changes
+    # taskInit dispara APENAS no reset() do logout (lista vazia) — só re-render,
+    # NUNCA reconciliar aqui (reconcile([]) apagaria o documento inteiro)
     @controllerBind('taskInit', =>
+      @queue.push ['renderAll']
+      @uIRunner()
+    )
+    # taskbar:init dispara no tasksInitial() do login, com as Abas persistidas já
+    # carregadas: recarrega o documento da sessão (força — cobre troca de usuário
+    # sem reload de página) e reconcilia
+    @controllerBind('taskbar:init', =>
+      App.TaskbarCollections.init(force: true)
       App.TaskbarCollections.reconcile(_.map(App.TaskManager.all(), (task) -> task.key))
       @queue.push ['renderAll']
       @uIRunner()
     )
     @controllerBind('taskUpdate', (tasks) =>
-      for task in tasks when task.active
+      # auto-expand só na TRANSIÇÃO de ativação — updates da Aba já ativa (título,
+      # meta) não re-expandem Coleção recolhida manualmente
+      for task in tasks when task.active && task.key isnt @lastActiveKey
+        @lastActiveKey = task.key
         collection = App.TaskbarCollections.collectionFor(task.key)
         if collection && collection.collapsed
           App.TaskbarCollections.expand(collection.id)
@@ -839,7 +878,7 @@ class Remove extends App.ControllerModal
     @ui.remove(@event, @key, true)
 ```
 
-O que mudou vs. o original: `App.TaskbarCollections.init()` no constructor; reconcile no `taskInit`; auto-expand no `taskUpdate`; `removeKey` no `taskRemove`; bind de `taskbarCollections:change`; `buildUnits`/`renderAll`/`renderCollectionUnit`/`renderParts`/`refreshCollectionHeaders`/`collectionHeaderClick` novos; bloco `dndOptions`+`@el.sortable` do constructor **removido** (volta na Task 6). `remove`/`removeTask`/`location`/classe `Remove` intocados.
+O que mudou vs. o original: `App.TaskbarCollections.init()` no constructor; reload forçado do documento + reconcile no `taskbar:init` (login) — `taskInit` (logout/reset) segue só re-renderizando; auto-expand por transição de ativação (`@lastActiveKey`) no `taskUpdate`; `removeKey` no `taskRemove`; bind de `taskbarCollections:change`; `buildUnits`/`renderAll`/`renderCollectionUnit`/`renderParts`/`refreshCollectionHeaders`/`collectionHeaderClick` novos; bloco `dndOptions`+`@el.sortable` do constructor **removido** (volta na Task 6). `remove`/`removeTask`/`location`/classe `Remove` intocados.
 
 - [ ] **Step 4.5: Rodar e ver passar**
 
@@ -1058,6 +1097,9 @@ Em `taskbar_widget.coffee`:
     @closeKeys(keys)
 
   closeKeys: (keys) =>
+    # Aba ativa por último: as outras morrem antes, e a única navegação resultante
+    # aponta para uma Aba sobrevivente (fora da Coleção)
+    keys = _.sortBy(keys, (key) -> App.TaskManager.get(key)?.active is true)
     for key in keys
       @removeTask(key)
 ```
@@ -1244,6 +1286,9 @@ Em `taskbar_widget.coffee`:
     @el.find('> a, .js-collection-header, .js-collection-items > a').each (_i, el) ->
       $el = $(el)
       return if $el.is(ui.item)
+      # o placeholder do sortable é um <a> sem data-key que acompanha o ponteiro —
+      # armá-lo como alvo cancelaria drops legítimos de borda
+      return if $el.hasClass('ui-sortable-placeholder')
       return if $el.data('key') is draggedKey
       offset = $el.offset()
       height = $el.outerHeight()
@@ -1320,6 +1365,10 @@ Em `taskbar_widget.coffee`:
 Notas para o executor:
 - Os rebuilds disparados por `addKey`/`create`/`setKeys` são **síncronos** (evento → `uIRunner`), então depois de `@dndApplyOrder()` o DOM já está normalizado e o `nameEditStart` encontra o container novo.
 - `sortable('cancel')` dentro do `stop` reverte o movimento do sortable — quem materializa o resultado do drop de miolo é o rebuild.
+- **Watch-item (Step 6.5)**: o rebuild síncrono roda ainda dentro do callback `stop` do
+  sortable, substituindo o DOM antes do cleanup interno do jQuery UI. Se aparecer erro
+  do sortable no console durante o drag real, manter o `cancel` síncrono e deferir o
+  resto (`_.defer => @dndDropOn(...)` / `_.defer @dndApplyOrder`).
 - `reorder` grava prios com update mudo (sem re-render), então o input de nome aberto sobrevive.
 - O `renderParts`/`refreshCollectionHeaders` não interagem com o DnD.
 
@@ -1417,7 +1466,7 @@ Inserir logo após o fechamento do bloco `.tasks { ... }`:
   min-width: 0;
   background: var(--menu-background-primary);
   color: var(--menu-text);
-  border: 1px solid var(--menu-border);
+  border: var(--menu-border-secondary);
   border-radius: 3px;
   padding: 2px 6px;
   font: inherit;
@@ -1457,18 +1506,25 @@ Inserir logo após o fechamento do bloco `.tasks { ... }`:
 
 .task-collection-items {
   margin-left: 14px;
-  border-left: 1px solid var(--menu-border);
+  border-left: var(--menu-border-secondary);
   min-height: 2px;
 }
 
 .tasks .is-drop-target {
-  box-shadow: inset 0 0 0 2px #419ed7;
+  box-shadow: inset 0 0 0 2px var(--menu-background-active);
   border-radius: 4px;
-  background: rgba(65, 158, 215, 0.15);
+  // mesma matiz de --button-primary-background (hsl(203, 65%, 55%)) com alpha —
+  // var() não carrega canal alpha e o wash translúcido funciona nos dois temas
+  background: hsla(203, 65%, 55%, 0.15);
 }
 ```
 
 Regras do repo: só variáveis `--menu-*` (light/dark automáticos — o NDesk tem sidebar clara no light mode); **não** usar `url(#id)` em SVG (Safari); o `.hide` é utilitário global.
+
+**Atenção**: `--menu-border` e `--menu-border-secondary` são shorthands **completos** de
+borda (valem `none` em vários temas) — nunca usar dentro de `1px solid var(...)`. No
+tema dark `--menu-border-secondary: none`, então a linha de indentação dos membros some
+(consistente com o design sem bordas do dark); a indentação por `margin-left` permanece.
 
 - [ ] **Step 7.2: Conferir visual nos dois temas**
 
@@ -1559,7 +1615,10 @@ Com a skill `verify` (dois browsers se possível — Chromium e WebKit):
 4. Menu ⋯: renomear; desfazer (abas voltam soltas); fechar todas — com uma aba contendo rascunho de resposta digitado, a modal única aparece com a contagem.
 5. Recolher/expandir; ativar membro por busca com Coleção recolhida → expande e persiste.
 6. Reordenar: bordas de abas soltas, arrastar o container da Coleção; Coleção sobre Coleção só reordena.
-7. Persistência: F5 e re-login → Coleções, nomes, ordem e collapsed intactos.
+7. Persistência: F5 e re-login → Coleções, nomes, ordem e collapsed intactos. Incluir
+   o ciclo **logout → login sem F5** (SPA não recarrega a página): Coleções intactas —
+   regressão do bug de `reconcile([])` no logout. Se possível, logar com um segundo
+   usuário no mesmo browser e conferir que as Coleções do primeiro **não vazam**.
 8. Auto-limpeza: (console) `App.Config.set('ui_task_mananger_max_task_count', 3)` com 4+ abas, 2 em Coleção → só as soltas fecham. Restaurar o valor depois.
 9. Vue intocado: abrir `/desktop` → taskbar plana, sem erro de console.
 
