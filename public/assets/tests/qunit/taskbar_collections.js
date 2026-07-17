@@ -471,4 +471,156 @@ QUnit.test('fechar todas com aba ativa; guard de key morta no closeKeys', assert
   }, 300)
 })
 
+// ===== Task 6: drag & drop =====
+
+QUnit.module('TaskbarWidget: drag & drop')
+
+QUnit.test('dndDropOn: miolo de aba solta cria coleção na posição do alvo', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content6dnd"></div><div id="taskbar-wd6" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content6dnd'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wd6') })
+  App.TaskManager.execute({ key: 'G1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'G2', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'G3', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'G4', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    widget.dndDropOn($('#taskbar-wd6 a[data-key=G2]'), $('#taskbar-wd6 a[data-key=G4]'))
+
+    const c = App.TaskbarCollections.collectionFor('G2')
+    assert.ok(c, 'coleção criada')
+    assert.deepEqual(c.keys, ['G2', 'G4'], 'alvo primeiro, arrastada depois')
+    assert.notOk($('#taskbar-wd6 .js-collection-name-input').hasClass('hide'), 'edição de nome já aberta')
+
+    const flat = _.map(App.TaskManager.all(), task => task.key)
+    assert.deepEqual(flat, ['G1', 'G2', 'G4', 'G3'], 'prios achatados: coleção ancora na posição do alvo')
+
+    widget.dndDropOn($('#taskbar-wd6 .js-collection-header'), $('#taskbar-wd6 a[data-key=G1]'))
+    assert.deepEqual(App.TaskbarCollections.collectionFor('G1').keys, ['G2', 'G4', 'G1'], 'drop no cabeçalho entra no fim')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('drop em cabeçalho recolhido expande; drop em membro adiciona', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content7dnd"></div><div id="taskbar-wd7" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content7dnd'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wd7') })
+  App.TaskManager.execute({ key: 'H1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'H2', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'H3', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'H4', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const c = App.TaskbarCollections.create(['H1', 'H2'])
+    App.TaskbarCollections.toggleCollapsed(c.id)
+
+    widget.dndDropOn($('#taskbar-wd7 .js-collection-header'), $('#taskbar-wd7 a[data-key=H3]'))
+    assert.deepEqual(App.TaskbarCollections.get(c.id).keys, ['H1', 'H2', 'H3'])
+    assert.equal(App.TaskbarCollections.get(c.id).collapsed, false, 'cabeçalho recolhido expandiu no drop')
+
+    widget.dndDropOn($('#taskbar-wd7 .js-collection-items a[data-key=H2]'), $('#taskbar-wd7 > a[data-key=H4]'))
+    assert.deepEqual(App.TaskbarCollections.get(c.id).keys, ['H1', 'H2', 'H3', 'H4'], 'miolo de membro adiciona à coleção dele')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('dndApplyOrder: membership recomputada do DOM (entrar posicionado / sair / dissolver)', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content8dnd"></div><div id="taskbar-wd8" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content8dnd'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wd8') })
+  App.TaskManager.execute({ key: 'K1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'K2', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'K3', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const c = App.TaskbarCollections.create(['K1', 'K2'])
+
+    // simula o sortable movendo K3 pra dentro, entre K1 e K2
+    $('#taskbar-wd8 > a[data-key=K3]').insertAfter($('#taskbar-wd8 .js-collection-items a[data-key=K1]'))
+    widget.dndApplyOrder()
+    assert.deepEqual(App.TaskbarCollections.get(c.id).keys, ['K1', 'K3', 'K2'], 'entrou na posição do drop')
+
+    // simula arrastar K1 e K3 pra fora
+    $('#taskbar-wd8 .js-collection-items a[data-key=K1]').appendTo('#taskbar-wd8')
+    widget.dndApplyOrder()
+    assert.deepEqual(App.TaskbarCollections.get(c.id).keys, ['K3', 'K2'], 'K1 saiu da coleção')
+
+    $('#taskbar-wd8 .js-collection-items a').appendTo('#taskbar-wd8')
+    widget.dndApplyOrder()
+    assert.notOk(App.TaskbarCollections.get(c.id), 'coleção esvaziada pelo drag morre')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+// dndFindTarget é a fonte única das zonas: o dndSort arma por ela E o veto do
+// rearrange do sortable (dndPatchIntersect) congela a lista por ela
+QUnit.test('dndFindTarget: miolo arma, borda não, coleção arrastada nunca arma', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content9dnd"></div><div id="taskbar-wd9" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content9dnd'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wd9') })
+  App.TaskManager.execute({ key: 'Z1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'Z2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const target = $('#taskbar-wd9 a[data-key=Z1]')
+    const dragged = $('#taskbar-wd9 a[data-key=Z2]')
+    const midY = target.offset().top + target.outerHeight() * 0.5
+    const edgeY = target.offset().top + target.outerHeight() * 0.05
+    assert.equal(widget.dndFindTarget(midY, dragged).data('key'), 'Z1', 'miolo arma o alvo')
+    assert.notOk(widget.dndFindTarget(edgeY, dragged), 'borda não arma')
+
+    App.TaskbarCollections.create(['Z1', 'Z2'])
+    const container = $('#taskbar-wd9 .js-collection')
+    const header = $('#taskbar-wd9 .js-collection-header')
+    const headerMidY = header.offset().top + header.outerHeight() * 0.5
+    assert.notOk(widget.dndFindTarget(headerMidY, container), 'coleção arrastada nunca arma miolo')
+    const member = $('#taskbar-wd9 .js-collection-items a[data-key=Z2]')
+    assert.ok(widget.dndFindTarget(headerMidY, member).hasClass('js-collection-header'), 'miolo do cabeçalho arma para abas')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+// ===== Task 6 (emenda): invariante de filiação única em create/setKeys =====
+
+QUnit.module('TaskbarCollections: filiação única', {
+  beforeEach: () => {
+    App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  },
+})
+
+QUnit.test('create rouba a key de outra coleção (e dissolve a esvaziada)', assert => {
+  const c1 = App.TaskbarCollections.create(['Ticket-1', 'Ticket-2'])
+  const c2 = App.TaskbarCollections.create(['Ticket-1'])
+  assert.deepEqual(App.TaskbarCollections.get(c1.id).keys, ['Ticket-2'], 'coleção antiga perdeu a key')
+  assert.deepEqual(App.TaskbarCollections.get(c2.id).keys, ['Ticket-1'], 'nova coleção ficou com a key')
+
+  const c3 = App.TaskbarCollections.create(['Ticket-1'])
+  assert.notOk(App.TaskbarCollections.get(c2.id), 'coleção esvaziada pelo create dissolve')
+  assert.deepEqual(App.TaskbarCollections.get(c3.id).keys, ['Ticket-1'])
+})
+
+QUnit.test('setKeys rouba a key de outra coleção', assert => {
+  const c1 = App.TaskbarCollections.create(['Ticket-1', 'Ticket-2'])
+  const c2 = App.TaskbarCollections.create(['Ticket-9'])
+  App.TaskbarCollections.setKeys(c2.id, ['Ticket-1', 'Ticket-9'])
+  assert.deepEqual(App.TaskbarCollections.get(c1.id).keys, ['Ticket-2'], 'c1 perdeu Ticket-1')
+  assert.deepEqual(App.TaskbarCollections.get(c2.id).keys, ['Ticket-1', 'Ticket-9'], 'c2 ganhou na posição pedida')
+})
+
 }

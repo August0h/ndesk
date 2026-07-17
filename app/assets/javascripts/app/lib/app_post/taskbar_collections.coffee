@@ -77,6 +77,9 @@ class App.TaskbarCollectionsSingleton
     _.find(@collections, (collection) -> _.contains(collection.keys, key))
 
   create: (keys = []) =>
+    # invariante de filiação única: uma key vive em NO MÁXIMO uma coleção —
+    # o DnD (connectWith) pode trazer uma key que ainda pertence a outra
+    @removeKey(key, false) for key in keys
     collection =
       id:        "c-#{Date.now()}-#{Math.floor(Math.random() * 99999)}"
       name:      @defaultName()
@@ -145,6 +148,11 @@ class App.TaskbarCollectionsSingleton
     if keys.length is 0
       @collections = _.without(@collections, collection)
     else
+      # invariante de filiação única: strip apenas de OUTRA coleção — as keys já
+      # no alvo não precisam (o array é substituído por inteiro logo abaixo)
+      for key in keys
+        other = @collectionFor(key)
+        @removeKey(key, false) if other && other.id isnt id
       collection.keys = clone(keys)
     @changed()
 

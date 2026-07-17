@@ -123,6 +123,7 @@ class App.TaskbarWidget extends App.CollectionController
         localeEls.push @renderCollectionUnit(unit)
     @html localeEls
     @collectionOrderSet()
+    @initDnd()
     @onRenderEnd()
 
   renderCollectionUnit: (unit) ->
@@ -154,6 +155,136 @@ class App.TaskbarWidget extends App.CollectionController
       tasks = _.compact(App.TaskManager.get(key) for key in collection.keys)
       el.toggleClass('is-active',   _.some(tasks, (task) -> task.active))
       el.toggleClass('is-modified', _.some(tasks, (task) -> task.notify))
+
+  # --- drag & drop -------------------------------------------------------------
+
+  initDnd: =>
+    baseOptions =
+      tolerance:            'pointer'
+      distance:             15
+      opacity:              0.6
+      forcePlaceholderSize: true
+      connectWith:          '.tasks, .js-collection-items'
+      sort:                 @dndSort
+      beforeStop:           @dndBeforeStop
+      stop:                 @dndStop
+
+    rootOptions = _.extend({}, baseOptions, items: '> a, > .js-collection')
+    @el.sortable(rootOptions)
+    @dndPatchIntersect(@el)
+
+    innerOptions = _.extend({}, baseOptions, items: '> a')
+    inner = @el.find('.js-collection-items')
+    inner.sortable(innerOptions)
+    inner.each (_i, el) =>
+      @dndPatchIntersect($(el))
+
+  # o jQuery UI reposiciona o placeholder (rearrange) ANTES de disparar o sort:
+  # a cada entrada vertical do ponteiro o alvo "foge" pro outro lado do
+  # placeholder e o miolo nunca fica hoverable com mouse real (verificado com
+  # drag real: só entrada horizontal armava). Veto por instância: com o ponteiro
+  # no miolo de um alvo válido o sortable não rearranja — o alvo fica parado e o
+  # dndSort arma; nas bordas o comportamento original (reordenar) segue intacto.
+  dndPatchIntersect: (listEl) =>
+    instance = listEl.data('ui-sortable')
+    return if !instance
+    return if instance.dndZonePatched
+    instance.dndZonePatched = true
+    original = instance._intersectsWithPointer
+    widget = @
+    instance._intersectsWithPointer = (item) ->
+      intersection = original.call(@, item)
+      return intersection if !intersection
+      pointerY = @positionAbs.top + @offset.click.top
+      return false if widget.dndFindTarget(pointerY, @currentItem)
+      intersection
+
+  dndFindTarget: (pointerY, draggedItem) =>
+    return null if draggedItem.hasClass('js-collection')
+    draggedKey = draggedItem.data('key')
+    target = null
+    @el.find('> a, .js-collection-header, .js-collection-items > a').each (_i, el) ->
+      $el = $(el)
+      return if $el.is(draggedItem)
+      # o placeholder do sortable é um <a> sem data-key que acompanha o ponteiro —
+      # armá-lo como alvo cancelaria drops legítimos de borda
+      return if $el.hasClass('ui-sortable-placeholder')
+      return if $el.data('key') is draggedKey
+      offset = $el.offset()
+      height = $el.outerHeight()
+      if pointerY > offset.top + height * 0.2 && pointerY < offset.top + height * 0.8
+        target = $el
+        return false
+      return
+    target
+
+  dndSort: (e, ui) =>
+    @dndClearTarget()
+    target = @dndFindTarget(e.pageY, ui.item)
+    return if !target
+    @dndTarget = target
+    target.addClass('is-drop-target')
+
+  dndClearTarget: =>
+    @dndTarget = null
+    @el.find('.is-drop-target').removeClass('is-drop-target')
+
+  dndBeforeStop: (e, ui) =>
+    @dndDropTarget = @dndTarget
+
+  dndStop: (e, ui) =>
+    target = @dndDropTarget
+    @dndDropTarget = null
+    @dndClearTarget()
+    if target
+      $(e.target).sortable('cancel')
+      @dndDropOn(target, ui.item)
+      return
+    @dndApplyOrder()
+
+  dndDropOn: (target, draggedEl) =>
+    draggedKey = draggedEl.data('key')
+    return if !draggedKey
+    newCollection = null
+    if target.hasClass('js-collection-header')
+      id = target.closest('.js-collection').data('id')
+      App.TaskbarCollections.addKey(id, draggedKey)
+      App.TaskbarCollections.expand(id)
+    else
+      targetKey = target.data('key')
+      return if !targetKey || targetKey is draggedKey
+      targetCollection = App.TaskbarCollections.collectionFor(targetKey)
+      if targetCollection
+        App.TaskbarCollections.addKey(targetCollection.id, draggedKey)
+      else
+        newCollection = App.TaskbarCollections.create([targetKey, draggedKey])
+    @dndApplyOrder()
+    if newCollection
+      el = @el.find(".js-collection[data-id='#{newCollection.id}']")
+      @nameEditStart(el)
+
+  dndApplyOrder: =>
+    keys = []
+    membership = {}
+    @el.find('> a, > .js-collection').each (_i, el) ->
+      $el = $(el)
+      if $el.hasClass('js-collection')
+        id = $el.data('id')
+        membership[id] = []
+        $el.find('.js-collection-items > a').each (_j, member) ->
+          key = $(member).data('key')
+          membership[id].push key
+          keys.push key
+          return
+      else
+        keys.push $el.data('key')
+      return
+    for id, memberKeys of membership
+      collection = App.TaskbarCollections.get(id)
+      continue if !collection
+      if !_.isEqual(collection.keys, memberKeys)
+        App.TaskbarCollections.setKeys(id, memberKeys)
+    App.TaskManager.reorder(keys) if keys.length
 
   # --- interações da coleção --------------------------------------------------
 
