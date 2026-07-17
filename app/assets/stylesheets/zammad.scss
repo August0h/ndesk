@@ -4868,14 +4868,20 @@ footer {
     color: var(--menu-text-active);
   }
 
-  &.is-collapsed.is-modified .task-collection-name:after {
+  &.is-collapsed.is-active .task-collection-count {
+    color: inherit;
+    opacity: 0.75;
+  }
+
+  // dot no contador (nunca trunca) — currentColor: cinza no repouso, branco no header ativo
+  &.is-collapsed.is-modified .task-collection-count::before {
     content: '';
     display: inline-block;
     width: 6px;
     height: 6px;
-    margin-left: 6px;
+    margin-right: 6px;
     border-radius: 50%;
-    background: var(--menu-text-active);
+    background: currentColor;
   }
 }
 
@@ -4941,11 +4947,23 @@ footer {
   visibility: visible;
 }
 
-.task-collection-menu {
+// composto para vencer as regras globais de .dropdown-menu (declaradas depois no arquivo)
+.task-collection-menu.dropdown-menu {
   position: absolute;
   top: 100%;
+  left: auto;
   right: 6px;
+  min-width: 140px;
   z-index: 100;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px hsla(0, 0%, 100%, 0.1) inset,
+    0 3px 10px hsla(0, 0%, 0%, 0.35);
+
+  > li > a {
+    margin: 0;
+    padding: 6px 12px;
+  }
 
   &:not(.hide) {
     display: block;
