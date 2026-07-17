@@ -623,4 +623,66 @@ QUnit.test('setKeys rouba a key de outra coleção', assert => {
   assert.deepEqual(App.TaskbarCollections.get(c2.id).keys, ['Ticket-1', 'Ticket-9'], 'c2 ganhou na posição pedida')
 })
 
+// ===== Task 6 (review): guarda contra aninhamento de Coleção no drop =====
+
+QUnit.module('TaskbarWidget: drag & drop (review)')
+
+QUnit.test('dndApplyOrder: coleção aninhada ilegalmente no DOM não é absorvida', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content10dnd"></div><div id="taskbar-wd10" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content10dnd'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wd10') })
+  App.TaskManager.execute({ key: 'R1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'R2', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'R3', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'R4', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const a = App.TaskbarCollections.create(['R1', 'R2'])
+    const b = App.TaskbarCollections.create(['R3', 'R4'])
+
+    // simula o finalize ilegal do jQuery UI (_contactContainers troca de container
+    // só por interseção do ponteiro): container de B aninhado nos items de A
+    $(`#taskbar-wd10 .js-collection[data-id='${b.id}']`)
+      .appendTo($(`#taskbar-wd10 .js-collection[data-id='${a.id}'] .js-collection-items`))
+    widget.dndApplyOrder()
+
+    assert.deepEqual(App.TaskbarCollections.get(a.id).keys, ['R1', 'R2'], 'A não absorveu os membros de B')
+    assert.deepEqual(App.TaskbarCollections.get(b.id).keys, ['R3', 'R4'], 'B sobrevive intacta no módulo')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('dndStop: coleção finalizada dentro de outra é rejeitada sem tocar o modelo', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content11dnd"></div><div id="taskbar-wd11" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content11dnd'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wd11') })
+  App.TaskManager.execute({ key: 'R1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'R2', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'R3', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'R4', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const a = App.TaskbarCollections.create(['R1', 'R2'])
+    const b = App.TaskbarCollections.create(['R3', 'R4'])
+    const flatBefore = _.map(App.TaskManager.all(), task => task.key)
+
+    const bEl = $(`#taskbar-wd11 .js-collection[data-id='${b.id}']`)
+    bEl.appendTo($(`#taskbar-wd11 .js-collection[data-id='${a.id}'] .js-collection-items`))
+    widget.dndStop({ target: $('#taskbar-wd11').get(0) }, { item: bEl })
+
+    assert.deepEqual(App.TaskbarCollections.get(a.id).keys, ['R1', 'R2'], 'guarda: A intacta')
+    assert.deepEqual(App.TaskbarCollections.get(b.id).keys, ['R3', 'R4'], 'guarda: B intacta')
+    assert.deepEqual(_.map(App.TaskManager.all(), task => task.key), flatBefore, 'guarda: prios intactos')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
 }

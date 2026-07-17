@@ -189,12 +189,17 @@ class App.TaskbarWidget extends App.CollectionController
     instance = listEl.data('ui-sortable')
     return if !instance
     return if instance.dndZonePatched
+    # fail-soft: se um upgrade do jQuery UI remover/renomear o hook interno,
+    # o DnD segue sem o veto (perde só a ergonomia do miolo, nada quebra)
+    return if !_.isFunction(instance._intersectsWithPointer)
     instance.dndZonePatched = true
     original = instance._intersectsWithPointer
     widget = @
     instance._intersectsWithPointer = (item) ->
       intersection = original.call(@, item)
       return intersection if !intersection
+      # fail-soft: sem os internos esperados, devolve o resultado original
+      return intersection if !@positionAbs || !@offset?.click
       pointerY = @positionAbs.top + @offset.click.top
       return false if widget.dndFindTarget(pointerY, @currentItem)
       intersection
@@ -233,6 +238,15 @@ class App.TaskbarWidget extends App.CollectionController
     @dndDropTarget = @dndTarget
 
   dndStop: (e, ui) =>
+    # coleção finalizada DENTRO de outra: o _contactContainers do jQuery UI troca
+    # de container só por interseção do ponteiro — nunca confere o item arrastado
+    # contra o seletor items da lista receptora — e o connectWith liga raiz↔items
+    # nos dois sentidos; sem a guarda o dndApplyOrder fundiria as duas coleções
+    if ui.item.hasClass('js-collection') && !ui.item.parent().is(@el)
+      $(e.target).sortable('cancel')
+      @dndDropTarget = null
+      @dndClearTarget()
+      return
     target = @dndDropTarget
     @dndDropTarget = null
     @dndClearTarget()
@@ -271,13 +285,17 @@ class App.TaskbarWidget extends App.CollectionController
       if $el.hasClass('js-collection')
         id = $el.data('id')
         membership[id] = []
-        $el.find('.js-collection-items > a').each (_j, member) ->
+        # só filhos diretos: um container aninhado ilegalmente (finalize do
+        # jQuery UI sem a guarda do dndStop) não pode ter os membros absorvidos
+        $el.find('> .js-collection-items > a').each (_j, member) ->
           key = $(member).data('key')
+          return if !key
           membership[id].push key
           keys.push key
           return
       else
-        keys.push $el.data('key')
+        key = $el.data('key')
+        keys.push key if key
       return
     for id, memberKeys of membership
       collection = App.TaskbarCollections.get(id)
