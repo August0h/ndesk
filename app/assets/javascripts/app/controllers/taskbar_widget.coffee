@@ -185,7 +185,7 @@ class App.TaskbarWidget extends App.CollectionController
 
   initDnd: =>
     baseOptions =
-      tolerance:            'pointer'
+      tolerance:            'intersect'
       distance:             15
       opacity:              0.6
       forcePlaceholderSize: true

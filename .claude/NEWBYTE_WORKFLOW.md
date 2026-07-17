@@ -144,6 +144,9 @@ Alteracoes:
   - **Drag & drop** (jQuery UI sortable em dois níveis): miolo (~60%) cria/adiciona à
     Coleção, bordas reordenam; cabeçalho recolhido expande no drop; guard contra
     aninhamento ilegal de Coleção; ordem achatada em `TaskManager.reorder`.
+    `tolerance: 'intersect'` (não `'pointer'`): sem isso o rearrange do sortable
+    disparava na borda e o alvo "fugia" do ponteiro antes do miolo — o gesto de criar
+    grupo virava reordenação (corrigido no QA da PR).
   - **F5/relogin (item 7 do QA)**: Coleções, nomes, ordem e recolhimento sobrevivem;
     a Aba restaurada como ativa não reabre Coleção recolhida (bootActiveKeys) e o
     render em dois níveis não sai achatado no boot.
