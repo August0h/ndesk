@@ -121,3 +121,41 @@ Alteracoes:
   ambas obrigatórias. POST/surveys/stats/embed do ticket expõem o par; stats com
   bloco por dimensão (médias ignoram NULL; `count_resolution` por atendente).
   Sem alias para o param antigo `score`.
+
+### 2026-07-17 - branch feat/ticket-grouping
+
+**Branch**: `feat/ticket-grouping`
+
+Alteracoes:
+- **Coleções de abas na taskbar**: o atendente organiza as Abas da taskbar (sidebar
+  esquerda da UI clássica) em Coleções nomeadas via drag & drop, persistidas em
+  `user.preferences` (`taskbar_collections`). Zero backend novo — save por
+  `PUT /api/v1/users/preferences` (merge por chave), ordem via `prio` da taskbar.
+  - **Módulo `App.TaskbarCollections`** (`lib/app_post/taskbar_collections.coffee`):
+    dono único do documento (id/nome/collapsed/keys), filiação única de cada Aba,
+    persistência debounced (nível `task`, cancelada no logout), reconciliação de keys
+    órfãs (guard contra `reconcile(undefined)`), nome padrão traduzido ("Coleção N").
+  - **Auto-limpeza**: `TaskManager.tasksAutoCleanup` pula Abas que estão em Coleção.
+  - **Widget em dois níveis** (`controllers/taskbar_widget.coffee`): Abas soltas na
+    raiz + container por Coleção (cabeçalho, contador, membros); recolher/expandir;
+    auto-expand ao ativar membro (só em transição real de ativação).
+  - **Menu ⋯**: renomear inline (Enter/Esc/blur), desfazer Coleção, fechar todas
+    (modal única quando há rascunho não salvo).
+  - **Drag & drop** (jQuery UI sortable em dois níveis): miolo (~60%) cria/adiciona à
+    Coleção, bordas reordenam; cabeçalho recolhido expande no drop; guard contra
+    aninhamento ilegal de Coleção; ordem achatada em `TaskManager.reorder`.
+  - **F5/relogin (item 7 do QA)**: Coleções, nomes, ordem e recolhimento sobrevivem;
+    a Aba restaurada como ativa não reabre Coleção recolhida (bootActiveKeys) e o
+    render em dois níveis não sai achatado no boot.
+  - **Estilos** (`zammad.scss`, variáveis `--menu-*`, light/dark) e **i18n pt-BR**.
+  - Docs de domínio: `docs/taskbar/CONTEXT.md`, ADR `docs/taskbar/adr/0001-*`,
+    spec e plano em `docs/superpowers/`.
+
+Arquivos modificados:
+- `app/assets/javascripts/app/lib/app_post/taskbar_collections.coffee` (novo)
+- `app/assets/javascripts/app/views/widget/task_collection.jst.eco` (novo)
+- `app/assets/javascripts/app/controllers/taskbar_widget.coffee`
+- `app/assets/javascripts/app/lib/app_post/task_manager/singleton.coffee`
+- `app/assets/stylesheets/zammad.scss`
+- `i18n/zammad.pt-br.po`
+- `public/assets/tests/qunit/taskbar_collections.js` (novo)
