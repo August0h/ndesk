@@ -171,7 +171,7 @@ class App.TaskbarWidget extends App.CollectionController
     @el.find('.js-collection-menu').addClass('hide')
     return if isOpen
     menu.removeClass('hide')
-    $(document).one('click.taskbarCollectionMenu', =>
+    $(document).off('click.taskbarCollectionMenu').one('click.taskbarCollectionMenu', =>
       @el.find('.js-collection-menu').addClass('hide')
     )
 
@@ -248,6 +248,9 @@ class App.TaskbarWidget extends App.CollectionController
     # aponta para uma Aba sobrevivente (fora da Coleção)
     keys = _.sortBy(keys, (key) -> App.TaskManager.get(key)?.active is true)
     for key in keys
+      # key pode ter morrido entre o snapshot (modal aberto) e o Discard —
+      # removeTask sem guard estoura em currentTask.active e aborta o loop
+      continue if !App.TaskManager.get(key)
       @removeTask(key)
 
   # --- fechamento de abas (comportamento original) ----------------------------

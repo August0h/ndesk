@@ -388,4 +388,87 @@ QUnit.test('fechar todas sem alterações pendentes: fecha direto, sem modal', a
   }, 300)
 })
 
+QUnit.test('renomear por focusout: perder o foco confirma', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content6"></div><div id="taskbar-w6" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content6'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w6') })
+  App.TaskManager.execute({ key: 'N1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'N2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const c = App.TaskbarCollections.create(['N1', 'N2'])
+    $('#taskbar-w6 .js-collection-menu-toggle').trigger('click')
+    $('#taskbar-w6 .js-collection-rename').trigger('click')
+    $('#taskbar-w6 .js-collection-name-input').val('Contábil')
+    $('#taskbar-w6 .js-collection-name-input').trigger('focusout')
+    assert.equal(App.TaskbarCollections.get(c.id).name, 'Contábil', 'focusout confirma')
+    assert.equal($('#taskbar-w6 .js-collection-name').text(), 'Contábil', 'DOM atualizado')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('clique no documento fecha o menu aberto', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content7"></div><div id="taskbar-w7" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content7'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w7') })
+  App.TaskManager.execute({ key: 'K1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'K2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    App.TaskbarCollections.create(['K1', 'K2'])
+    $('#taskbar-w7 .js-collection-menu-toggle').trigger('click')
+    assert.notOk($('#taskbar-w7 .js-collection-menu').hasClass('hide'), 'menu aberto')
+    $(document).trigger('click')
+    assert.ok($('#taskbar-w7 .js-collection-menu').hasClass('hide'), 'clique fora fecha')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('fechar todas com aba ativa; guard de key morta no closeKeys', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content8"></div><div id="taskbar-w8" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content8'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w8') })
+  App.TaskManager.execute({ key: 'CA1', controller: 'TestController1', params: {}, show: true, persistent: false })
+  App.TaskManager.execute({ key: 'CA2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    App.TaskbarCollections.create(['CA1', 'CA2'])
+    $('#taskbar-w8 .js-collection-menu-toggle').trigger('click')
+    $('#taskbar-w8 .js-collection-close-all').trigger('click')
+    setTimeout(() => {
+      assert.notOk(App.TaskManager.get('CA1'), 'aba ativa fechada')
+      assert.notOk(App.TaskManager.get('CA2'), 'aba inativa fechada')
+      assert.equal(App.TaskbarCollections.all().length, 0, 'coleção morreu')
+
+      // guard de key morta: taskRemove reconcilia o documento SINCRONAMENTE, então
+      // o caminho de UI nunca vê key morta — quem vê é o Discard do modal, que
+      // guarda um snapshot de keys de quando abriu. Simula esse caminho direto.
+      App.TaskManager.execute({ key: 'CA3', controller: 'TestController1', params: {}, show: false, persistent: false })
+      App.TaskManager.execute({ key: 'CA4', controller: 'TestController1', params: {}, show: false, persistent: false })
+      setTimeout(() => {
+        App.TaskbarCollections.create(['CA3', 'CA4'])
+        const staleKeys = ['CA3', 'CA4'] // snapshot como o modal guardaria
+        App.TaskManager.remove('CA3')    // membro morre com o "modal aberto"
+        widget.closeKeys(staleKeys)      // Discard com snapshot velho: não pode estourar
+        assert.notOk(App.TaskManager.get('CA3'), 'key morta ignorada sem exceção')
+        assert.notOk(App.TaskManager.get('CA4'), 'sobrevivente fechada mesmo após key morta')
+        assert.equal(App.TaskbarCollections.all().length, 0, 'coleção morreu junto')
+        widget.releaseController()
+        App.TaskManager.reset()
+        done()
+      }, 200)
+    }, 200)
+  }, 300)
+})
+
 }
