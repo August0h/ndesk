@@ -3,6 +3,12 @@ class App.TaskbarWidget extends App.CollectionController
     'click .js-close':                    'remove'
     'click .js-locationVerify':           'location'
     'click .js-collection-header':        'collectionHeaderClick'
+    'click .js-collection-menu-toggle':   'collectionMenuToggle'
+    'click .js-collection-rename':        'collectionRename'
+    'click .js-collection-dissolve':      'collectionDissolve'
+    'click .js-collection-close-all':     'collectionCloseAll'
+    'keydown .js-collection-name-input':  'collectionNameKeydown'
+    'focusout .js-collection-name-input': 'collectionNameFocusout'
 
   model: false
   template: 'widget/task_item'
@@ -157,6 +163,93 @@ class App.TaskbarWidget extends App.CollectionController
     id = $(e.currentTarget).closest('.js-collection').data('id')
     App.TaskbarCollections.toggleCollapsed(id)
 
+  collectionMenuToggle: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    menu = $(e.currentTarget).closest('.js-collection-header').find('.js-collection-menu')
+    isOpen = !menu.hasClass('hide')
+    @el.find('.js-collection-menu').addClass('hide')
+    return if isOpen
+    menu.removeClass('hide')
+    $(document).one('click.taskbarCollectionMenu', =>
+      @el.find('.js-collection-menu').addClass('hide')
+    )
+
+  collectionRename: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    collectionEl = $(e.currentTarget).closest('.js-collection')
+    @el.find('.js-collection-menu').addClass('hide')
+    @nameEditStart(collectionEl)
+
+  nameEditStart: (collectionEl) ->
+    return if !collectionEl.get(0)
+    collectionEl.find('.js-collection-name').addClass('hide')
+    input = collectionEl.find('.js-collection-name-input')
+    input.removeClass('hide')
+    input.trigger('focus')
+    input.get(0).select()
+
+  collectionNameKeydown: (e) =>
+    if e.keyCode is 13
+      e.preventDefault()
+      @nameEditCommit($(e.currentTarget))
+    else if e.keyCode is 27
+      e.preventDefault()
+      @nameEditCancel($(e.currentTarget))
+
+  collectionNameFocusout: (e) =>
+    input = $(e.currentTarget)
+    return if input.hasClass('hide')
+    @nameEditCommit(input)
+
+  nameEditCommit: (input) =>
+    id = input.closest('.js-collection').data('id')
+    input.addClass('hide')
+    App.TaskbarCollections.rename(id, input.val())
+    @queue.push ['renderAll']
+    @uIRunner()
+
+  nameEditCancel: (input) =>
+    input.addClass('hide')
+    @queue.push ['renderAll']
+    @uIRunner()
+
+  collectionDissolve: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    id = $(e.currentTarget).closest('.js-collection').data('id')
+    @el.find('.js-collection-menu').addClass('hide')
+    App.TaskbarCollections.dissolve(id)
+
+  collectionCloseAll: (e) =>
+    e.preventDefault()
+    e.stopPropagation()
+    id = $(e.currentTarget).closest('.js-collection').data('id')
+    @el.find('.js-collection-menu').addClass('hide')
+    collection = App.TaskbarCollections.get(id)
+    return if !collection
+    keys = clone(collection.keys)
+    changedCount = 0
+    for key in keys
+      worker = App.TaskManager.worker(key)
+      changedCount++ if worker && worker.changed && worker.changed()
+    if changedCount > 0
+      new CollectionCloseAll(
+        keys:         keys
+        changedCount: changedCount
+        ui:           @
+      )
+      return
+    @closeKeys(keys)
+
+  closeKeys: (keys) =>
+    # Aba ativa por último: as outras morrem antes, e a única navegação resultante
+    # aponta para uma Aba sobrevivente (fora da Coleção)
+    keys = _.sortBy(keys, (key) -> App.TaskManager.get(key)?.active is true)
+    for key in keys
+      @removeTask(key)
+
   # --- fechamento de abas (comportamento original) ----------------------------
 
   location: (e) =>
@@ -221,3 +314,17 @@ class Remove extends App.ControllerModal
   onSubmit: =>
     @close()
     @ui.remove(@event, @key, true)
+
+class CollectionCloseAll extends App.ControllerModal
+  buttonClose: true
+  buttonCancel: true
+  buttonSubmit: __('Discard Changes')
+  buttonClass: 'btn--danger'
+  head: __('Confirmation')
+
+  content: ->
+    App.i18n.translateContent('%s tabs, %s with unsaved changes — close anyway?', @keys.length, @changedCount)
+
+  onSubmit: =>
+    @close()
+    @ui.closeKeys(@keys)

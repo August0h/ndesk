@@ -297,4 +297,95 @@ QUnit.test('widget recém-criado não auto-expande em update da aba já ativa', 
   }, 300)
 })
 
+// ===== Task 5: menu da coleção =====
+
+QUnit.module('TaskbarWidget: menu da coleção')
+
+QUnit.test('renomear inline: Enter confirma, Esc mantém, vazio mantém', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content3"></div><div id="taskbar-w3" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content3'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w3') })
+  App.TaskManager.execute({ key: 'M1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'M2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const c = App.TaskbarCollections.create(['M1', 'M2'])
+
+    $('#taskbar-w3 .js-collection-menu-toggle').trigger('click')
+    assert.notOk($('#taskbar-w3 .js-collection-menu').hasClass('hide'), 'menu abre')
+
+    $('#taskbar-w3 .js-collection-rename').trigger('click')
+    assert.notOk($('#taskbar-w3 .js-collection-name-input').hasClass('hide'), 'input visível')
+
+    $('#taskbar-w3 .js-collection-name-input').val('Fiscal')
+    $('#taskbar-w3 .js-collection-name-input').trigger($.Event('keydown', { keyCode: 13 }))
+    assert.equal(App.TaskbarCollections.get(c.id).name, 'Fiscal', 'Enter confirma')
+    assert.equal($('#taskbar-w3 .js-collection-name').text(), 'Fiscal', 'DOM atualizado')
+
+    $('#taskbar-w3 .js-collection-menu-toggle').trigger('click')
+    $('#taskbar-w3 .js-collection-rename').trigger('click')
+    $('#taskbar-w3 .js-collection-name-input').val('Outra coisa')
+    $('#taskbar-w3 .js-collection-name-input').trigger($.Event('keydown', { keyCode: 27 }))
+    assert.equal(App.TaskbarCollections.get(c.id).name, 'Fiscal', 'Esc descarta')
+
+    $('#taskbar-w3 .js-collection-menu-toggle').trigger('click')
+    $('#taskbar-w3 .js-collection-rename').trigger('click')
+    $('#taskbar-w3 .js-collection-name-input').val('   ')
+    $('#taskbar-w3 .js-collection-name-input').trigger($.Event('keydown', { keyCode: 13 }))
+    assert.equal(App.TaskbarCollections.get(c.id).name, 'Fiscal', 'vazio mantém')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('desfazer coleção: abas voltam soltas, nada fecha', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content4"></div><div id="taskbar-w4" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content4'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w4') })
+  App.TaskManager.execute({ key: 'D1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'D2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    App.TaskbarCollections.create(['D1', 'D2'])
+    $('#taskbar-w4 .js-collection-menu-toggle').trigger('click')
+    $('#taskbar-w4 .js-collection-dissolve').trigger('click')
+    assert.equal(App.TaskbarCollections.all().length, 0, 'coleção morreu')
+    assert.ok(App.TaskManager.get('D1'), 'aba viva')
+    assert.ok(App.TaskManager.get('D2'), 'aba viva')
+    assert.equal($('#taskbar-w4 > a').length, 2, 'abas soltas no DOM')
+    widget.releaseController()
+    App.TaskManager.reset()
+    done()
+  }, 300)
+})
+
+QUnit.test('fechar todas sem alterações pendentes: fecha direto, sem modal', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content5"></div><div id="taskbar-w5" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content5'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w5') })
+  App.TaskManager.execute({ key: 'F1', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'F2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    App.TaskbarCollections.create(['F1', 'F2'])
+    $('#taskbar-w5 .js-collection-menu-toggle').trigger('click')
+    $('#taskbar-w5 .js-collection-close-all').trigger('click')
+    setTimeout(() => {
+      assert.notOk(App.TaskManager.get('F1'), 'F1 fechada')
+      assert.notOk(App.TaskManager.get('F2'), 'F2 fechada')
+      assert.equal(App.TaskbarCollections.all().length, 0, 'coleção morreu junto')
+      widget.releaseController()
+      App.TaskManager.reset()
+      done()
+    }, 300)
+  }, 300)
+})
+
 }
