@@ -114,6 +114,9 @@ class App.TaskbarCollectionsSingleton
     return if !collection
     name = $.trim(name)
     return if name is ''
+    # cap espelhado no maxlength do template — o módulo é a fonte de verdade
+    # (DnD/API podem contornar o input da UI)
+    name = name.substr(0, 80)
     collection.name = name
     @changed()
 

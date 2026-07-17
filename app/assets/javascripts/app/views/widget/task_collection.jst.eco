@@ -1,4 +1,4 @@
-<div class="task-collection js-collection<% if @collection.collapsed: %> is-collapsed<% end %><% if @active: %> is-active<% end %><% if @notify: %> is-modified<% end %>" data-id="<%- @collection.id %>">
+<div class="task-collection js-collection<% if @collection.collapsed: %> is-collapsed<% end %><% if @active: %> is-active<% end %><% if @notify: %> is-modified<% end %>" data-id="<%= @collection.id %>">
   <div class="task-collection-header js-collection-header" title="<%= @collection.name %>">
     <%- @Icon('arrow-right', 'task-collection-chevron') %>
     <div class="task-collection-name js-collection-name u-textTruncate"><%= @collection.name %></div>

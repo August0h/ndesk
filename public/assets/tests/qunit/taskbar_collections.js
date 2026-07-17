@@ -195,7 +195,7 @@ QUnit.test('render, recolher e expansão por ativação', assert => {
   $('#qunit').append('<div id="tw-content"></div><div id="taskbar-w1" class="tasks"></div>')
   App.TaskManager.init({ el: $('#tw-content'), offlineModus: true, force: true })
   App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
-  new App.TaskbarWidget({ el: $('#taskbar-w1') })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w1') })
   App.TaskManager.execute({ key: 'W1', controller: 'TestController1', params: {}, show: false, persistent: false })
   App.TaskManager.execute({ key: 'W2', controller: 'TestController1', params: {}, show: false, persistent: false })
   App.TaskManager.execute({ key: 'W3', controller: 'TestController1', params: {}, show: false, persistent: false })
@@ -219,6 +219,10 @@ QUnit.test('render, recolher e expansão por ativação', assert => {
       assert.notOk($('#taskbar-w1 .js-collection').hasClass('is-collapsed'), 'ativação de membro expande (persistido)')
       assert.notOk(App.TaskbarCollections.get(App.TaskbarCollections.collectionFor('W3').id).collapsed, 'collapsed=false no documento')
       assert.ok($('#taskbar-w1 .js-collection').hasClass('is-active'), 'cabeçalho reflete membro ativo')
+      // higiene: solta o widget e zera o TaskManager para não vazar handlers
+      // nem registros App.Taskbar para os próximos testes
+      widget.releaseController()
+      App.TaskManager.reset()
       done()
     }, 200)
   }, 300)
@@ -229,7 +233,7 @@ QUnit.test('fechar aba de coleção remove do documento; coleção vazia some do
   $('#qunit').append('<div id="tw-content2"></div><div id="taskbar-w2" class="tasks"></div>')
   App.TaskManager.init({ el: $('#tw-content2'), offlineModus: true, force: true })
   App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
-  new App.TaskbarWidget({ el: $('#taskbar-w2') })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w2') })
   App.TaskManager.execute({ key: 'X1', controller: 'TestController1', params: {}, show: false, persistent: false })
   App.TaskManager.execute({ key: 'X2', controller: 'TestController1', params: {}, show: false, persistent: false })
 
@@ -242,6 +246,8 @@ QUnit.test('fechar aba de coleção remove do documento; coleção vazia some do
       setTimeout(() => {
         assert.equal($('#taskbar-w2 .js-collection').length, 0, 'coleção vazia sumiu do DOM')
         assert.equal(App.TaskbarCollections.all().length, 0, 'e do documento')
+        widget.releaseController()
+        App.TaskManager.reset()
         done()
       }, 200)
     }, 200)
@@ -254,11 +260,41 @@ QUnit.test('logout (TaskManager.reset) não toca o documento de coleções', ass
   $('#qunit').append('<div id="tw-content2b"></div><div id="taskbar-w2b" class="tasks"></div>')
   App.TaskManager.init({ el: $('#tw-content2b'), offlineModus: true, force: true })
   App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
-  new App.TaskbarWidget({ el: $('#taskbar-w2b') })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-w2b') })
   App.TaskbarCollections.create(['Ticket-1', 'Ticket-2'])
   App.TaskManager.reset()
   assert.equal(App.TaskbarCollections.all().length, 1, 'documento intacto após reset')
   assert.equal($('#taskbar-w2b .js-collection').length, 0, 'nada renderizado (sem abas vivas)')
+  widget.releaseController()
+})
+
+// regressão (review): navigation.render() destrói/recria o widget a cada
+// ui:rerender — o widget novo precisa semear lastActiveKey, senão o primeiro
+// taskUpdate da aba JÁ ativa é lido como transição e re-expande Coleção
+// recolhida de propósito
+QUnit.test('widget recém-criado não auto-expande em update da aba já ativa', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-content4"></div><div id="taskbar-w4" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-content4'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  App.TaskManager.execute({ key: 'Y1', controller: 'TestController1', params: {}, show: true, persistent: false })
+  App.TaskManager.execute({ key: 'Y2', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const c = App.TaskbarCollections.create(['Y1', 'Y2'])
+    App.TaskbarCollections.toggleCollapsed(c.id) // usuário recolheu de propósito
+    const widget = new App.TaskbarWidget({ el: $('#taskbar-w4') }) // recriação pós-rerender
+    assert.ok($('#taskbar-w4 .js-collection').hasClass('is-collapsed'), 'começa recolhida')
+
+    App.TaskManager.touch('Y1') // update de metadados da aba já ativa
+    setTimeout(() => {
+      assert.ok($('#taskbar-w4 .js-collection').hasClass('is-collapsed'), 'update da aba já ativa não re-expande')
+      assert.ok(App.TaskbarCollections.get(c.id).collapsed, 'collapsed persiste no documento')
+      widget.releaseController()
+      App.TaskManager.reset()
+      done()
+    }, 200)
+  }, 300)
 })
 
 }

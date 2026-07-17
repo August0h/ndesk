@@ -17,6 +17,11 @@ class App.TaskbarWidget extends App.CollectionController
 
     App.TaskbarCollections.init()
 
+    # seed: navigation.render() destrói/recria o widget a cada ui:rerender — sem
+    # o seed, o primeiro taskUpdate da aba já ativa seria lido como transição de
+    # ativação e re-expandiria Coleção recolhida de propósito pelo usuário
+    @lastActiveKey = _.find(App.TaskManager.all(), (task) -> task.active)?.key
+
     App.Event.bind(
       'Taskbar:destroy'
       (data, event) =>
