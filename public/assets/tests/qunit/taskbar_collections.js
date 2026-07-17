@@ -11,16 +11,16 @@ QUnit.module('TaskbarCollections: estado', {
 QUnit.test('create gera id, nome padrão e keys', assert => {
   const c1 = App.TaskbarCollections.create(['Ticket-1', 'Ticket-2'])
   assert.ok(/^c-/.test(c1.id), 'id com prefixo c-')
-  assert.equal(c1.name, 'Collection 1', 'nome padrão (locale en nos testes)')
+  assert.equal(c1.name, App.i18n.translateInline('Collection %s', 1), 'nome padrão traduzido')
   assert.equal(c1.collapsed, false)
   assert.deepEqual(c1.keys, ['Ticket-1', 'Ticket-2'])
 
   const c2 = App.TaskbarCollections.create(['Ticket-3'])
-  assert.equal(c2.name, 'Collection 2', 'numeração incrementa')
+  assert.equal(c2.name, App.i18n.translateInline('Collection %s', 2), 'numeração incrementa')
 
   App.TaskbarCollections.rename(c1.id, 'Fiscal')
   const c3 = App.TaskbarCollections.create(['Ticket-4'])
-  assert.equal(c3.name, 'Collection 1', 'menor número livre é reutilizado')
+  assert.equal(c3.name, App.i18n.translateInline('Collection %s', 1), 'menor número livre é reutilizado')
 })
 
 QUnit.test('get e collectionFor', assert => {
@@ -207,7 +207,7 @@ QUnit.test('render, recolher e expansão por ativação', assert => {
     assert.equal($('#taskbar-w1 > .js-collection').length, 1, 'container da coleção')
     assert.equal($('#taskbar-w1 .js-collection-items > a').length, 2, '2 membros dentro')
     assert.equal($('#taskbar-w1 > a').length, 1, 'só W2 solta')
-    assert.equal($('#taskbar-w1 .js-collection-name').text(), 'Collection 1')
+    assert.equal($('#taskbar-w1 .js-collection-name').text(), App.i18n.translateInline('Collection %s', 1), 'nome padrão traduzido no DOM')
     assert.equal($('#taskbar-w1 .js-collection-count').text(), '2')
     assert.equal($('#taskbar-w1 .js-collection-items > a').first().data('key'), 'W1', 'ordem da coleção respeitada')
 
@@ -293,6 +293,51 @@ QUnit.test('widget recém-criado não auto-expande em update da aba já ativa', 
       widget.releaseController()
       App.TaskManager.reset()
       done()
+    }, 200)
+  }, 300)
+})
+
+// regressão item 7 (recolhimento sobrevive ao F5/relogin): a reativação da Aba que o
+// servidor restaura como ativa toma o ramo de supressão (não expande Coleção recolhida).
+// Aqui asseguramos a DECISÃO do widget (consumo de bootActiveKeys): o estado `collapsed`
+// compartilhado não pode ser asserido porque a QUnit tem outros widgets vivos (a sidebar
+// real do app) que expandem a Coleção do módulo compartilhado; o desfecho ponta-a-ponta
+// (collapsed + render em dois níveis sobrevivem ao F5) é validado pelo probe manual.
+QUnit.test('boot: bootActiveKeys suprime a restauração casante e desarma na 1ª transição', assert => {
+  const done = assert.async()
+  $('#qunit').append('<div id="tw-boot"></div><div id="taskbar-wboot" class="tasks"></div>')
+  App.TaskManager.init({ el: $('#tw-boot'), offlineModus: true, force: true })
+  App.TaskbarCollections.init({ force: true, offline: true, collections: [] })
+  const widget = new App.TaskbarWidget({ el: $('#taskbar-wboot') })
+  App.TaskManager.execute({ key: 'BootA', controller: 'TestController1', params: {}, show: false, persistent: false })
+  App.TaskManager.execute({ key: 'BootB', controller: 'TestController1', params: {}, show: false, persistent: false })
+
+  setTimeout(() => {
+    const c = App.TaskbarCollections.create(['BootA', 'BootB'])
+    App.TaskbarCollections.toggleCollapsed(c.id)
+
+    // caso casante: a Aba restaurada como ativa (BootA) reativa → ramo de supressão
+    widget.bootActiveKeys = ['BootA']
+    App.TaskManager.execute({ key: 'BootA', controller: 'TestController1', params: {}, show: true, persistent: false })
+    setTimeout(() => {
+      // consumo de bootActiveKeys == este widget tomou o ramo que pula o auto-expand
+      assert.deepEqual(widget.bootActiveKeys, [], 'restauração casante consome bootActiveKeys (não expandiu por este widget)')
+      assert.equal(widget.lastActiveKey, 'BootA', 'widget registrou a ativação restaurada')
+
+      // caso não-casante: um ui:rerender de meio de sessão reconstrói o widget e
+      // re-semeia bootActiveKeys com a ativa atual; a 1ª transição para OUTRA Aba deve
+      // desarmar o conjunto MESMO ASSIM, senão uma ativação de usuário posterior da Aba
+      // semeada seria suprimida por engano
+      const widget2 = new App.TaskbarWidget({ el: $('#taskbar-wboot') })
+      widget2.bootActiveKeys = ['BootA']
+      App.TaskManager.execute({ key: 'BootB', controller: 'TestController1', params: {}, show: true, persistent: false })
+      setTimeout(() => {
+        assert.deepEqual(widget2.bootActiveKeys, [], '1ª transição não-casante desarma o conjunto (evita falsa supressão depois)')
+        widget.releaseController()
+        widget2.releaseController()
+        App.TaskManager.reset()
+        done()
+      }, 150)
     }, 200)
   }, 300)
 })

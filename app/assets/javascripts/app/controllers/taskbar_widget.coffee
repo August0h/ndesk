@@ -23,10 +23,25 @@ class App.TaskbarWidget extends App.CollectionController
 
     App.TaskbarCollections.init()
 
+    # super() rodou a render inicial ANTES do init do módulo; no primeiro boot o
+    # documento de Coleções ainda não existia, então a taskbar saiu achatada. Além
+    # disso o widget às vezes é construído logo DEPOIS do evento taskbar:init (perde a
+    # render de lá). Se já há Coleções carregadas, re-render agora para garantir os dois
+    # níveis no F5/relogin. (buildUnits já filtra membros órfãos, então dispensa reconcile.)
+    if App.TaskbarCollections.all().length
+      @queue.push ['renderAll']
+      @uIRunner()
+
     # seed: navigation.render() destrói/recria o widget a cada ui:rerender — sem
     # o seed, o primeiro taskUpdate da aba já ativa seria lido como transição de
     # ativação e re-expandiria Coleção recolhida de propósito pelo usuário
     @lastActiveKey = _.find(App.TaskManager.all(), (task) -> task.active)?.key
+
+    # Abas que o servidor restaura como ativas no boot (F5/relogin): sua reativação
+    # NÃO deve expandir Coleção recolhida (item 7 — recolhimento sobrevive ao reload).
+    # App.Taskbar já tem os registros persistidos aqui, antes de o router reativar a
+    # aba; em teste offline a lista é vazia, então ativação de usuário expande normal.
+    @bootActiveKeys = _.map(_.filter(App.Taskbar.all(), (taskbar) -> taskbar.active), (taskbar) -> taskbar.key)
 
     App.Event.bind(
       'Taskbar:destroy'
@@ -60,6 +75,16 @@ class App.TaskbarWidget extends App.CollectionController
       # meta) não re-expandem Coleção recolhida manualmente
       for task in tasks when task.active && task.key isnt @lastActiveKey
         @lastActiveKey = task.key
+        # restauração de boot: a PRIMEIRA transição de ativação após a construção é a
+        # única que pode ser a Aba restaurada como ativa pelo servidor. Se casar com o
+        # conjunto, não expande (item 7). Desarma o conjunto SEMPRE nessa primeira
+        # transição — mesmo sem casar — senão um ui:rerender de meio de sessão (troca de
+        # idioma, prefs, Beta-UI) re-semearia bootActiveKeys e suprimiria erroneamente
+        # uma ativação de usuário posterior.
+        if @bootActiveKeys.length
+          suppress = _.contains(@bootActiveKeys, task.key)
+          @bootActiveKeys = []
+          continue if suppress
         collection = App.TaskbarCollections.collectionFor(task.key)
         if collection && collection.collapsed
           App.TaskbarCollections.expand(collection.id)
