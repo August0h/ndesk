@@ -27860,3 +27860,18 @@ msgstr "O ticket não está finalizado"
 
 msgid "This ticket was already rated"
 msgstr "Este ticket já foi avaliado"
+
+msgid "Rename"
+msgstr "Renomear"
+
+msgid "Collection %s"
+msgstr "Coleção %s"
+
+msgid "Dissolve collection"
+msgstr "Desfazer coleção"
+
+msgid "Close all tabs"
+msgstr "Fechar todas as abas"
+
+msgid "%s tabs, %s with unsaved changes — close anyway?"
+msgstr "%s abas, %s com alterações não salvas — fechar mesmo assim?"

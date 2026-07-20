@@ -3,8 +3,13 @@
 ## Branch e PR
 
 - **Branch de producao**: `newbyte-stable` (NÃO é `main` nem `master`)
-- Toda PR deve ser aberta contra `newbyte-stable`
+- Commit livre é permitido (liberado pelo CTO) — não é obrigatório passar por PR **por commit**
+- **Mas SEMPRE na branch da feature — commit/push direto na `newbyte-stable` é PROIBIDO**
+- **Push também é livre na branch da feature** — push NÃO abre PR; PR é sempre uma ação
+  explícita e separada (confirmado pelo CTO em 2026-07-16)
+- **A PR só deve ser aberta no final, quando o usuário pedir explicitamente**
 - Criar branch com prefixo descritivo: `feat/`, `fix/`, `chore/`
+- A PR (quando pedida) é aberta contra `newbyte-stable`
 - Se o `gh pr create` falhar via GraphQL, usar a API REST:
   ```
   gh api repos/newbytesolucoesdigitais/ndesk/pulls \
@@ -54,8 +59,14 @@ Estes arquivos existem no workspace mas nao devem ser commitados:
 ## Restricoes de Git
 
 - **NUNCA** fazer operacoes destrutivas (pull, reset --hard, push --force, checkout --) sem aprovacao explicita do usuario
-- **NUNCA** fazer push direto na `newbyte-stable` - sempre via PR
+- **NUNCA** commitar ou fazer push direto na `newbyte-stable` — trabalho sempre na branch da feature
 - Preferir commits novos a amend
+
+## Frontend — SOMENTE o app legacy
+
+- **Todo trabalho de UI é no app legacy** (`app/assets/javascripts` e `app/assets/stylesheets`) — CoffeeScript/Spine.js, servido na raiz `/`.
+- **NUNCA trabalhar nos apps Vue** (`app/frontend/apps/desktop` e `app/frontend/apps/mobile`). Eles são código oficial do upstream Zammad (a migração do desktop pra Vue, servida em `/desktop` e `/mobile`) e o NDesk **não** os usa nem customiza.
+- Ignorar as mencoes aos apps Vue no `AGENTS.md` / CLAUDE.md — sao boilerplate herdado do upstream.
 
 ## Compatibilidade de Browser
 
@@ -110,3 +121,44 @@ Alteracoes:
   ambas obrigatórias. POST/surveys/stats/embed do ticket expõem o par; stats com
   bloco por dimensão (médias ignoram NULL; `count_resolution` por atendente).
   Sem alias para o param antigo `score`.
+
+### 2026-07-17 - branch feat/ticket-grouping
+
+**Branch**: `feat/ticket-grouping`
+
+Alteracoes:
+- **Coleções de abas na taskbar**: o atendente organiza as Abas da taskbar (sidebar
+  esquerda da UI clássica) em Coleções nomeadas via drag & drop, persistidas em
+  `user.preferences` (`taskbar_collections`). Zero backend novo — save por
+  `PUT /api/v1/users/preferences` (merge por chave), ordem via `prio` da taskbar.
+  - **Módulo `App.TaskbarCollections`** (`lib/app_post/taskbar_collections.coffee`):
+    dono único do documento (id/nome/collapsed/keys), filiação única de cada Aba,
+    persistência debounced (nível `task`, cancelada no logout), reconciliação de keys
+    órfãs (guard contra `reconcile(undefined)`), nome padrão traduzido ("Coleção N").
+  - **Auto-limpeza**: `TaskManager.tasksAutoCleanup` pula Abas que estão em Coleção.
+  - **Widget em dois níveis** (`controllers/taskbar_widget.coffee`): Abas soltas na
+    raiz + container por Coleção (cabeçalho, contador, membros); recolher/expandir;
+    auto-expand ao ativar membro (só em transição real de ativação).
+  - **Menu ⋯**: renomear inline (Enter/Esc/blur), desfazer Coleção, fechar todas
+    (modal única quando há rascunho não salvo).
+  - **Drag & drop** (jQuery UI sortable em dois níveis): miolo (~60%) cria/adiciona à
+    Coleção, bordas reordenam; cabeçalho recolhido expande no drop; guard contra
+    aninhamento ilegal de Coleção; ordem achatada em `TaskManager.reorder`.
+    `tolerance: 'intersect'` (não `'pointer'`): sem isso o rearrange do sortable
+    disparava na borda e o alvo "fugia" do ponteiro antes do miolo — o gesto de criar
+    grupo virava reordenação (corrigido no QA da PR).
+  - **F5/relogin (item 7 do QA)**: Coleções, nomes, ordem e recolhimento sobrevivem;
+    a Aba restaurada como ativa não reabre Coleção recolhida (bootActiveKeys) e o
+    render em dois níveis não sai achatado no boot.
+  - **Estilos** (`zammad.scss`, variáveis `--menu-*`, light/dark) e **i18n pt-BR**.
+  - Docs de domínio: `docs/taskbar/CONTEXT.md`, ADR `docs/taskbar/adr/0001-*`,
+    spec e plano em `docs/superpowers/`.
+
+Arquivos modificados:
+- `app/assets/javascripts/app/lib/app_post/taskbar_collections.coffee` (novo)
+- `app/assets/javascripts/app/views/widget/task_collection.jst.eco` (novo)
+- `app/assets/javascripts/app/controllers/taskbar_widget.coffee`
+- `app/assets/javascripts/app/lib/app_post/task_manager/singleton.coffee`
+- `app/assets/stylesheets/zammad.scss`
+- `i18n/zammad.pt-br.po`
+- `public/assets/tests/qunit/taskbar_collections.js` (novo)

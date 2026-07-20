@@ -543,6 +543,8 @@ class App.TaskManagerSingleton extends App.Controller
         tasks = App.Taskbar.search(sortBy:'updated_at', order:'ASC')
       for task in tasks
         if currentTaskCount() > maxTaskCount
+          # NDesk: Abas em Coleção são protegidas da limpeza automática
+          continue if App.TaskbarCollections.collectionFor(task.key)
           if !task.active
             worker = App.TaskManager.worker(task.key)
             if worker

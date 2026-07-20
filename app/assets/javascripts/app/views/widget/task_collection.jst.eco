@@ -1,0 +1,17 @@
+<div class="task-collection js-collection<% if @collection.collapsed: %> is-collapsed<% end %><% if @active: %> is-active<% end %><% if @notify: %> is-modified<% end %>" data-id="<%= @collection.id %>">
+  <div class="task-collection-header js-collection-header" title="<%= @collection.name %>">
+    <%- @Icon('arrow-right', 'task-collection-chevron') %>
+    <div class="task-collection-name js-collection-name u-textTruncate"><%= @collection.name %></div>
+    <input class="task-collection-name-input js-collection-name-input hide" value="<%= @collection.name %>" maxlength="80">
+    <div class="task-collection-count js-collection-count"><%= @count %></div>
+    <div class="task-collection-menu-toggle js-collection-menu-toggle" title="<%- @Ti('Actions') %>">
+      <%- @Icon('overflow-button') %>
+    </div>
+    <ul class="dropdown-menu dropdown-menu-right task-collection-menu js-collection-menu hide" role="menu">
+      <li role="menuitem"><a href="#" class="js-collection-rename"><%- @T('Rename') %></a></li>
+      <li role="menuitem"><a href="#" class="js-collection-dissolve"><%- @T('Dissolve collection') %></a></li>
+      <li role="menuitem"><a href="#" class="js-collection-close-all"><%- @T('Close all tabs') %></a></li>
+    </ul>
+  </div>
+  <div class="task-collection-items js-collection-items"></div>
+</div>
