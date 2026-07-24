@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 MD031 MD032 MD040 -->
 # Deploy Quase-Zero-Downtime (Swarm single-node) — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -770,7 +771,7 @@ Executar `cutover.md` passos 1–6 na VM (a TAG é a do VERSION restaurado; smok
     sleep 1
   done | tee /tmp/curl-loop.log
   ```
-- Disparar: `bash /opt/ndesk/deploy/deploy.sh <TAG> ` (a mesma tag serve — o
+- Disparar: `bash /opt/ndesk/deploy/deploy.sh <TAG>` (a mesma tag serve — o
   rolling completo é exercitado do mesmo jeito).
 - **Critério de aceite:** nenhum código fora de 2xx/3xx no log durante o rolling.
 - **Memória:** durante o overlap dos dois railsservers, rodar `docker stats
