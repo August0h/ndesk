@@ -75,7 +75,8 @@ Executar `cutover.md` passos 1–6 na VM (a TAG é a do VERSION restaurado; smok
 ## 6. Ensaiar o rollback do cutover
 
 Executar a seção "Rollback do cutover" do `cutover.md` na VM e confirmar que o
-compose volta a servir em `:8080`.
+compose volta a servir em `:8080`. (Na VM, omitir `-f scenarios/add-cloudflare-tunnel.yml`
+do `compose up`, como no §3 — com o token dummy o cloudflared entra em crash-loop.)
 
 ## 7. Encerrar
 

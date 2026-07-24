@@ -9,6 +9,8 @@ operação manual no host (`prod-ndesk`).
 docker run --rm --network ndesk-net \
   -e POSTGRESQL_HOST=zammad-postgresql -e POSTGRESQL_DB=zammad_production \
   -e POSTGRESQL_USER=<user> -e POSTGRESQL_PASS=<pass> -e POSTGRESQL_PORT=5432 \
+  -e REDIS_URL=redis://zammad-redis:6379 \
+  -e MEMCACHE_SERVERS=zammad-memcached:11211 \
   technewbyte/ndesk:<tag> \
   bash -c 'bundle exec rake db:create db:migrate db:seed'
 ```
