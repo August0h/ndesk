@@ -309,7 +309,7 @@ services:
   cloudflare-tunnel:
     # No ensaio (VM), CLOUDFLARE_TUNNEL_REPLICAS=0 no .env — o token de prod NUNCA
     # roda fora de prod (o tunnel roubaria tráfego real do helpdesk).
-    image: cloudflare/cloudflared
+    image: cloudflare/cloudflared:2026.7.2
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
@@ -406,6 +406,33 @@ set +a
 export RELEASE_TAG="$TAG"
 SMOKE_URL="${SMOKE_URL:-https://${ZAMMAD_FQDN:?ZAMMAD_FQDN ausente no .env}/}"
 
+# Preflight: o healthcheck do nginx no stack.yml usa a porta 8080 fixa.
+# Se NGINX_PORT divergir, todo deploy faria rollback automático — falhar já.
+if [ -n "${NGINX_PORT:-}" ] && [ "${NGINX_PORT}" != "8080" ]; then
+  log "ERRO: NGINX_PORT=${NGINX_PORT} no .env diverge do healthcheck (8080) do stack.yml"
+  exit 1
+fi
+
+# Preflight: sem os limites reais no .env, o stack cairia nos defaults de 500M
+# (railsserver com 3 workers e o ES com heap grande entrariam em OOM loop).
+missing=()
+for v in ZAMMAD_RAILSSERVER_RESOURCES_LIMITS_MEMORY ZAMMAD_NGINX_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_WEBSOCKET_RESOURCES_LIMITS_MEMORY ZAMMAD_SCHEDULER_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_BACKUP_RESOURCES_LIMITS_MEMORY ZAMMAD_POSTGRESQL_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_REDIS_RESOURCES_LIMITS_MEMORY ZAMMAD_MEMCACHED_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_ELASTICSEARCH_RESOURCES_LIMITS_MEMORY ELASTICSEARCH_JAVA_OPTS; do
+  [ -n "${!v:-}" ] || missing+=("$v")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+  log "ERRO: variáveis obrigatórias ausentes no ${ENV_FILE}: ${missing[*]}"
+  exit 1
+fi
+
+# Lock local: serializa contra execuções manuais concorrentes (o concurrency do
+# GitHub Actions só cobre deploys via workflow).
+exec 9>/var/lock/ndesk-deploy.lock
+flock -n 9 || { log "ERRO: outro deploy em andamento (lock /var/lock/ndesk-deploy.lock)"; exit 1; }
+
 ensure_network() {
   docker network inspect "$NETWORK" >/dev/null 2>&1 \
     || docker network create --driver overlay --attachable "$NETWORK"
@@ -420,7 +447,7 @@ run_migration() {
   log "migração pré-troca com ${IMAGE} (stack atual continua servindo)"
   docker run --rm --network "$NETWORK" \
     -e POSTGRESQL_DB="${POSTGRES_DB:-zammad_production}" \
-    -e POSTGRESQL_HOST=zammad-postgresql \
+    -e POSTGRESQL_HOST="${POSTGRES_HOST:-zammad-postgresql}" \
     -e POSTGRESQL_USER="${POSTGRES_USER:-zammad}" \
     -e POSTGRESQL_PASS="${POSTGRES_PASS:-zammad}" \
     -e POSTGRESQL_PORT="${POSTGRES_PORT:-5432}" \
@@ -443,8 +470,12 @@ stop_app() {
 
 deploy_stack() {
   log "stack deploy → ${TAG}"
+  # --resolve-image never: sem re-resolver digests de imagens mutáveis
+  # (cloudflared/postgres/ES) — deploy quente não recria infra. A imagem do app já foi
+  # puxada no pull_image; re-publicar uma tag nb.* existente NÃO é suportado
+  # (Release é imutável — crie tag nova).
   docker stack config -c "${DEPLOY_DIR}/stack.yml" \
-    | docker stack deploy --detach=false -c - "$STACK"
+    | docker stack deploy --detach=false --resolve-image never -c - "$STACK"
 }
 
 wait_converged() {
@@ -455,7 +486,7 @@ wait_converged() {
     ok=1
     for s in "${APP_SERVICES[@]}"; do
       line=$(docker service ls --filter "name=${STACK}_${s}" --format '{{.Replicas}} {{.Image}}')
-      [[ "$line" == 1/1\ "${IMAGE}"* ]] || { ok=0; break; }
+      [[ "$line" == "1/1 ${IMAGE}" || "$line" == "1/1 ${IMAGE}@"* ]] || { ok=0; break; }
     done
     if [ "$ok" = 1 ]; then
       log "convergiu: todos os serviços de app em ${TAG}"
@@ -477,8 +508,17 @@ post_swap() {
   [ -n "$cid" ] || { log "ERRO: container do railsserver não encontrado"; return 1; }
   docker exec "$cid" bundle exec rails r 'Rails.cache.clear'
   log "smoke test ${SMOKE_URL}"
-  curl -sfo /dev/null -m 30 "$SMOKE_URL"
-  log "smoke OK — deploy da ${TAG} concluído"
+  local attempt
+  for attempt in 1 2 3; do
+    if curl -sfo /dev/null -m 30 "$SMOKE_URL"; then
+      log "smoke OK — deploy da ${TAG} concluído"
+      return 0
+    fi
+    log "smoke falhou (tentativa ${attempt}/3)"
+    sleep 10
+  done
+  log "ERRO: smoke test falhou após 3 tentativas"
+  return 1
 }
 
 ensure_network
@@ -669,10 +709,22 @@ git commit -m "feat(ci): deploy quente por tag nb.* + dispatch com tag/maintenan
 # Runbook — Cutover compose → Swarm (prod-ndesk)
 
 Janela agendada e anunciada (~minutos). Executar num horário de baixo movimento.
-Pré-requisitos: PR do deploy mergeado; `deploy/` presente em `/opt/ndesk/deploy`
-(rode o workflow uma vez com dispatch até o passo de scp, ou rsync manual:
-`rsync -av deploy/ root@5.161.125.64:/opt/ndesk/deploy/`); backup do dia existente
-no volume `zammad_zammad-backup` (e no S3).
+
+Pré-requisitos:
+
+- PR do deploy mergeado e `deploy/` presente em `/opt/ndesk/deploy`. Caminho principal é a cópia manual:
+  `rsync -av deploy/ root@5.161.125.64:/opt/ndesk/deploy/`. Se preferir usar o workflow (dispatch) para entregar
+  os arquivos antes do cutover, o run ficará VERMELHO no passo Deploy (o `ensure_network` falha sem Swarm) mas os
+  arquivos já terão sido copiados — inofensivo.
+- Backup do dia existente no volume `zammad_zammad-backup` (e no S3).
+- Comparar os limites de memória dos containers atuais
+  (`docker inspect --format '{{.Name}} {{.HostConfig.Memory}}' $(docker ps -q)`) com o render do stack
+  (`RELEASE_TAG=<tag> bash -c 'set -a; source /opt/zammad/.env; set +a; docker stack config -c /opt/ndesk/deploy/stack.yml' | grep -A3 limits`)
+  — divergência = ajustar o `.env` antes do cutover.
+- Hoje o compose já publica a 8080 em `0.0.0.0` (verificado em 2026-07-23); o ingress do Swarm mantém o mesmo
+  comportamento — sem mudança de exposição. O acesso oficial continua sendo via Cloudflare Tunnel.
+- Conferir que `/opt/zammad/.env` é seguro para `source` em bash (sem valores com espaços/`$`/backticks sem aspas)
+  — o `deploy.sh` faz `source` nele, e o parser do compose é mais tolerante que o bash.
 
 ## Passos
 
@@ -684,10 +736,11 @@ no volume `zammad_zammad-backup` (e no S3).
    `cd /opt/zammad && docker compose -f docker-compose.yml -f scenarios/add-cloudflare-tunnel.yml -f scenarios/apply-resource-limits.yml down`
 3. **Ativar o Swarm:** `docker swarm init --advertise-addr 5.161.125.64`
 4. **Firewall:** confirmar de FORA do host que as portas de Swarm (2377/tcp,
-   7946/tcp+udp, 4789/udp) estão bloqueadas:
-   `sudo nmap -sT -sU -p T:2377,T:7946,U:7946,U:4789 5.161.125.64`
-   → `closed|filtered` para todas as portas listadas (o scan UDP exige root).
-   Se abertas, bloquear no firewall Hetzner/ufw ANTES de seguir.
+   7946/tcp+udp, 4789/udp) estão bloqueadas e que a 8080 continua como hoje:
+   `sudo nmap -sT -sU -p T:2377,T:7946,T:8080,U:7946,U:4789 5.161.125.64`
+   → `8080 open` (igual a hoje) e `closed|filtered` para as demais portas listadas
+   (o scan UDP exige root). Se alguma porta de Swarm estiver aberta, bloquear no
+   firewall Hetzner/ufw ANTES de seguir.
 5. **Subir o stack** (mesma tag, sem migração — a janela acaba quando convergir):
    `bash /opt/ndesk/deploy/deploy.sh "$TAG" --skip-migrate`
 6. **Verificar:**
@@ -710,6 +763,8 @@ no volume `zammad_zammad-backup` (e no S3).
 - O cron `s3-backup.sh` continua válido (o volume `zammad_zammad-backup` não mudou).
 - Os arquivos compose de `/opt/zammad` ficam no lugar como rota de fuga. NÃO apagar.
 - A partir daqui, todo deploy é pelo workflow (tag `nb.*` ou dispatch).
+- Evitar deploys entre 06:00–07:00 UTC (backup interno às 06:00, upload S3 às 07:00 — um deploy recria o serviço
+  de backup stop-first e pode truncar o dump); se inevitável, conferir o backup do dia no S3 depois.
 ```
 
 - [ ] **Step 2: Escrever `docs/deploy/runbooks/rehearsal.md`**

@@ -69,7 +69,8 @@ rollback automático, num modelo que o time já opera na frota de produção.
 
 O host `prod-ndesk` vira Swarm de nó único (`docker swarm init`). O stack `ndesk` é
 definido em arquivos versionados neste repo (diretório `deploy/`); o workflow os envia
-ao servidor via rsync — acaba a edição manual de compose no host.
+ao servidor por cópia dos arquivos (scp) — acaba a edição manual de compose no host
+(não remove arquivos deletados do servidor).
 
 | Serviço | Estratégia de update | Observação |
 |---|---|---|
@@ -112,8 +113,8 @@ o segundo deploy espera o primeiro.
 
 **Deploy quente (caminho padrão), quatro fases:**
 
-1. **Preparo** (stack antigo servindo): rsync dos arquivos de `deploy/` para o
-   servidor; `docker pull` da imagem nova.
+1. **Preparo** (stack antigo servindo): cópia dos arquivos (scp) de `deploy/` para o
+   servidor (não remove arquivos deletados do servidor); `docker pull` da imagem nova.
 2. **Migração pré-troca** (stack antigo servindo): job one-shot com a imagem nova na
    rede do stack — `rake db:migrate` + `rails r 'Locale.sync; Translation.sync'`.
    Sem migração pendente é um no-op de ~30s. Falhou → workflow para, nada foi trocado.
@@ -124,7 +125,8 @@ o segundo deploy espera o primeiro.
    algum serviço não estabilizar — o Swarm já terá revertido (`failure_action: rollback`).
 4. **Pós-troca:** `Rails.cache.clear` via `docker exec` no railsserver novo (depois da
    troca — o antigo já morreu e ninguém regrava entrada velha no memcached); o
-   `AppVersion` notifica os browsers; smoke test com curl na URL pública esperando 200.
+   `AppVersion` notifica os browsers; smoke test com curl na URL pública esperando
+   resposta de sucesso (2xx/3xx).
 
 **Janela de manutenção (`maintenance: true`) — a ordem inverte**, porque numa migração
 incompatível o código antigo não pode estar servindo quando ela roda:
@@ -136,7 +138,7 @@ incompatível o código antigo não pode estar servindo quando ela roda:
 **Healthchecks / update config:**
 
 - `railsserver`: `curl -sf http://localhost:3000/` — interval 10s, retries 3,
-  `start_period` 60s (cobre o boot do puma).
+  `start_period` 120s (cobre o boot do puma).
 - `nginx`: `curl -sf http://localhost:8080/` — atravessa o proxy.
 - `update_config`: `order: start-first`, `parallelism: 1`, `monitor: 30s`,
   `failure_action: rollback`.

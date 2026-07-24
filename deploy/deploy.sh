@@ -34,6 +34,26 @@ if [ -n "${NGINX_PORT:-}" ] && [ "${NGINX_PORT}" != "8080" ]; then
   exit 1
 fi
 
+# Preflight: sem os limites reais no .env, o stack cairia nos defaults de 500M
+# (railsserver com 3 workers e o ES com heap grande entrariam em OOM loop).
+missing=()
+for v in ZAMMAD_RAILSSERVER_RESOURCES_LIMITS_MEMORY ZAMMAD_NGINX_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_WEBSOCKET_RESOURCES_LIMITS_MEMORY ZAMMAD_SCHEDULER_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_BACKUP_RESOURCES_LIMITS_MEMORY ZAMMAD_POSTGRESQL_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_REDIS_RESOURCES_LIMITS_MEMORY ZAMMAD_MEMCACHED_RESOURCES_LIMITS_MEMORY \
+         ZAMMAD_ELASTICSEARCH_RESOURCES_LIMITS_MEMORY ELASTICSEARCH_JAVA_OPTS; do
+  [ -n "${!v:-}" ] || missing+=("$v")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+  log "ERRO: variáveis obrigatórias ausentes no ${ENV_FILE}: ${missing[*]}"
+  exit 1
+fi
+
+# Lock local: serializa contra execuções manuais concorrentes (o concurrency do
+# GitHub Actions só cobre deploys via workflow).
+exec 9>/var/lock/ndesk-deploy.lock
+flock -n 9 || { log "ERRO: outro deploy em andamento (lock /var/lock/ndesk-deploy.lock)"; exit 1; }
+
 ensure_network() {
   docker network inspect "$NETWORK" >/dev/null 2>&1 \
     || docker network create --driver overlay --attachable "$NETWORK"
@@ -48,7 +68,7 @@ run_migration() {
   log "migração pré-troca com ${IMAGE} (stack atual continua servindo)"
   docker run --rm --network "$NETWORK" \
     -e POSTGRESQL_DB="${POSTGRES_DB:-zammad_production}" \
-    -e POSTGRESQL_HOST=zammad-postgresql \
+    -e POSTGRESQL_HOST="${POSTGRES_HOST:-zammad-postgresql}" \
     -e POSTGRESQL_USER="${POSTGRES_USER:-zammad}" \
     -e POSTGRESQL_PASS="${POSTGRES_PASS:-zammad}" \
     -e POSTGRESQL_PORT="${POSTGRES_PORT:-5432}" \
@@ -71,8 +91,12 @@ stop_app() {
 
 deploy_stack() {
   log "stack deploy → ${TAG}"
+  # --resolve-image never: sem re-resolver digests de imagens mutáveis
+  # (cloudflared/postgres/ES) — deploy quente não recria infra. A imagem do app já foi
+  # puxada no pull_image; re-publicar uma tag nb.* existente NÃO é suportado
+  # (Release é imutável — crie tag nova).
   docker stack config -c "${DEPLOY_DIR}/stack.yml" \
-    | docker stack deploy --detach=false -c - "$STACK"
+    | docker stack deploy --detach=false --resolve-image never -c - "$STACK"
 }
 
 wait_converged() {
@@ -83,7 +107,7 @@ wait_converged() {
     ok=1
     for s in "${APP_SERVICES[@]}"; do
       line=$(docker service ls --filter "name=${STACK}_${s}" --format '{{.Replicas}} {{.Image}}')
-      [[ "$line" == 1/1\ "${IMAGE}"* ]] || { ok=0; break; }
+      [[ "$line" == "1/1 ${IMAGE}" || "$line" == "1/1 ${IMAGE}@"* ]] || { ok=0; break; }
     done
     if [ "$ok" = 1 ]; then
       log "convergiu: todos os serviços de app em ${TAG}"
@@ -105,8 +129,17 @@ post_swap() {
   [ -n "$cid" ] || { log "ERRO: container do railsserver não encontrado"; return 1; }
   docker exec "$cid" bundle exec rails r 'Rails.cache.clear'
   log "smoke test ${SMOKE_URL}"
-  curl -sfo /dev/null -m 30 "$SMOKE_URL"
-  log "smoke OK — deploy da ${TAG} concluído"
+  local attempt
+  for attempt in 1 2 3; do
+    if curl -sfo /dev/null -m 30 "$SMOKE_URL"; then
+      log "smoke OK — deploy da ${TAG} concluído"
+      return 0
+    fi
+    log "smoke falhou (tentativa ${attempt}/3)"
+    sleep 10
+  done
+  log "ERRO: smoke test falhou após 3 tentativas"
+  return 1
 }
 
 ensure_network

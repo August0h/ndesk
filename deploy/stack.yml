@@ -265,7 +265,7 @@ services:
   cloudflare-tunnel:
     # No ensaio (VM), CLOUDFLARE_TUNNEL_REPLICAS=0 no .env — o token de prod NUNCA
     # roda fora de prod (o tunnel roubaria tráfego real do helpdesk).
-    image: cloudflare/cloudflared
+    image: cloudflare/cloudflared:2026.7.2
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
