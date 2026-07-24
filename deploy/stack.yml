@@ -1,0 +1,298 @@
+# Stack Swarm do NDesk em produção (prod-ndesk).
+# Deployado EXCLUSIVAMENTE pelo deploy.sh (docker stack config | docker stack deploy) —
+# nunca à mão. A tag da Release entra via RELEASE_TAG (obrigatória; nunca 'latest' — ADR 0001).
+# Config/segredos vêm de /opt/zammad/.env, sourced pelo deploy.sh antes da interpolação.
+#
+# Atenção: no rolling start-first convivem 2 railsservers por ~1 min — o pico transitório
+# de memória (+1x limite do railsserver) foi validado no ensaio (runbook rehearsal.md).
+
+x-app-env: &app-env
+  MEMCACHE_SERVERS: ${MEMCACHE_SERVERS:-zammad-memcached:11211}
+  POSTGRESQL_DB: ${POSTGRES_DB:-zammad_production}
+  POSTGRESQL_HOST: ${POSTGRES_HOST:-zammad-postgresql}
+  POSTGRESQL_USER: ${POSTGRES_USER:-zammad}
+  POSTGRESQL_PASS: ${POSTGRES_PASS:-zammad}
+  POSTGRESQL_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRESQL_OPTIONS: ${POSTGRESQL_OPTIONS:-?pool=50}
+  POSTGRESQL_DB_CREATE:
+  REDIS_URL: ${REDIS_URL:-redis://zammad-redis:6379}
+  BACKUP_DIR: "${BACKUP_DIR:-/var/tmp/zammad}"
+  BACKUP_TIME: "${BACKUP_TIME:-03:00}"
+  HOLD_DAYS: "${HOLD_DAYS:-10}"
+  TZ: "${TZ:-Europe/Berlin}"
+  AUTOWIZARD_JSON:
+  AUTOWIZARD_RELATIVE_PATH:
+  ELASTICSEARCH_ENABLED:
+  ELASTICSEARCH_SCHEMA:
+  ELASTICSEARCH_HOST:
+  ELASTICSEARCH_PORT:
+  ELASTICSEARCH_USER:
+  ELASTICSEARCH_PASS:
+  ELASTICSEARCH_NAMESPACE:
+  ELASTICSEARCH_REINDEX:
+  NGINX_PORT:
+  NGINX_CLIENT_MAX_BODY_SIZE:
+  NGINX_SERVER_NAME:
+  NGINX_SERVER_SCHEME:
+  RAILS_TRUSTED_PROXIES:
+  ZAMMAD_HTTP_TYPE:
+  ZAMMAD_FQDN:
+  ZAMMAD_WEB_CONCURRENCY:
+  ZAMMAD_MANAGE_SESSIONS_JOBS_WORKERS:
+  ZAMMAD_PROCESS_SESSIONS_JOBS_WORKERS:
+  ZAMMAD_PROCESS_SCHEDULED_JOBS_WORKERS:
+  ZAMMAD_PROCESS_DELAYED_JOBS_WORKERS:
+  ZAMMAD_PROCESS_DELAYED_JOBS_WORKER_THREADS:
+  ZAMMAD_PROCESS_DELAYED_AI_JOBS_WORKERS:
+  ZAMMAD_PROCESS_DELAYED_AI_JOBS_WORKER_THREADS:
+  ZAMMAD_PROCESS_DELAYED_COMMUNICATION_INBOUND_JOBS_WORKERS:
+  ZAMMAD_PROCESS_DELAYED_COMMUNICATION_INBOUND_JOBS_WORKER_THREADS:
+
+x-app-volumes: &app-volumes
+  - zammad-backup:/var/tmp/zammad:ro
+  - zammad-storage:/opt/zammad/storage
+
+x-update-start-first: &update-start-first
+  parallelism: 1
+  order: start-first
+  monitor: 30s
+  failure_action: rollback
+
+x-update-stop-first: &update-stop-first
+  parallelism: 1
+  order: stop-first
+  monitor: 30s
+  failure_action: rollback
+
+services:
+  zammad-railsserver:
+    image: technewbyte/ndesk:${RELEASE_TAG:?defina RELEASE_TAG}
+    command: ["zammad-railsserver"]
+    environment: *app-env
+    volumes: *app-volumes
+    networks:
+      ndesk-net:
+        aliases: [zammad-railsserver]
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    deploy:
+      replicas: 1
+      update_config: *update-start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_RAILSSERVER_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_RAILSSERVER_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-nginx:
+    image: technewbyte/ndesk:${RELEASE_TAG:?defina RELEASE_TAG}
+    command: ["zammad-nginx"]
+    environment: *app-env
+    volumes: *app-volumes
+    ports:
+      - "${NGINX_EXPOSE_PORT:-8080}:${NGINX_PORT:-8080}"
+    networks:
+      ndesk-net:
+        aliases: [zammad-nginx]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    deploy:
+      replicas: 1
+      update_config: *update-start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_NGINX_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_NGINX_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-websocket:
+    image: technewbyte/ndesk:${RELEASE_TAG:?defina RELEASE_TAG}
+    command: ["zammad-websocket"]
+    environment: *app-env
+    volumes: *app-volumes
+    networks:
+      ndesk-net:
+        aliases: [zammad-websocket]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/6042"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    deploy:
+      replicas: 1
+      update_config: *update-start-first
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_WEBSOCKET_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_WEBSOCKET_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-scheduler:
+    # stop-first: NUNCA duas instâncias (o scheduler cron-like dispararia jobs em dobro).
+    # Sem healthcheck: não expõe porta; o gap de segundos no background é aceito (spec).
+    image: technewbyte/ndesk:${RELEASE_TAG:?defina RELEASE_TAG}
+    command: ["zammad-scheduler"]
+    environment: *app-env
+    volumes: *app-volumes
+    networks:
+      ndesk-net:
+        aliases: [zammad-scheduler]
+    stop_grace_period: 60s
+    deploy:
+      replicas: 1
+      update_config: *update-stop-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_SCHEDULER_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_SCHEDULER_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-backup:
+    image: technewbyte/ndesk:${RELEASE_TAG:?defina RELEASE_TAG}
+    command: ["zammad-backup"]
+    environment: *app-env
+    user: "0:0"
+    volumes:
+      - zammad-backup:/var/tmp/zammad
+      - zammad-storage:/opt/zammad/storage
+    networks:
+      ndesk-net:
+        aliases: [zammad-backup]
+    deploy:
+      replicas: 1
+      update_config: *update-stop-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_BACKUP_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_BACKUP_RESOURCES_LIMITS_MEMORY:-500m}"
+
+  zammad-postgresql:
+    image: postgres:${POSTGRES_VERSION:-17.9-alpine}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zammad_production}
+      POSTGRES_USER: ${POSTGRES_USER:-zammad}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS:-zammad}
+    volumes:
+      - postgresql-data:/var/lib/postgresql/data
+    networks:
+      ndesk-net:
+        aliases: [zammad-postgresql]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_POSTGRESQL_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_POSTGRESQL_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-redis:
+    image: redis:${REDIS_VERSION:-8.6.1-alpine}
+    volumes:
+      - redis-data:/data
+    networks:
+      ndesk-net:
+        aliases: [zammad-redis]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_REDIS_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_REDIS_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-memcached:
+    image: memcached:${MEMCACHE_VERSION:-1.6.40-alpine}
+    command: memcached -m 256M
+    networks:
+      ndesk-net:
+        aliases: [zammad-memcached]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_MEMCACHED_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_MEMCACHED_RESOURCES_LIMITS_MEMORY:-500M}"
+
+  zammad-elasticsearch:
+    image: elasticsearch:${ELASTICSEARCH_VERSION:-9.3.1}
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: ${ELASTICSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      ndesk-net:
+        aliases: [zammad-elasticsearch]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "${ZAMMAD_ELASTICSEARCH_RESOURCES_LIMITS_CPUS:-1.0}"
+          memory: "${ZAMMAD_ELASTICSEARCH_RESOURCES_LIMITS_MEMORY:-1G}"
+
+  cloudflare-tunnel:
+    # No ensaio (VM), CLOUDFLARE_TUNNEL_REPLICAS=0 no .env — o token de prod NUNCA
+    # roda fora de prod (o tunnel roubaria tráfego real do helpdesk).
+    image: cloudflare/cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      ndesk-net: {}
+    deploy:
+      replicas: ${CLOUDFLARE_TUNNEL_REPLICAS:-1}
+      restart_policy:
+        condition: any
+
+networks:
+  ndesk-net:
+    external: true
+
+volumes:
+  postgresql-data:
+    external: true
+    name: zammad_postgresql-data
+  redis-data:
+    external: true
+    name: zammad_redis-data
+  elasticsearch-data:
+    external: true
+    name: zammad_elasticsearch-data
+  zammad-storage:
+    external: true
+    name: zammad_zammad-storage
+  zammad-backup:
+    external: true
+    name: zammad_zammad-backup
