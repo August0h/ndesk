@@ -400,18 +400,31 @@ log() { echo "[deploy $(date -u +%H:%M:%S)] $*"; }
 
 [ -f "$ENV_FILE" ] || { log "ERRO: ${ENV_FILE} não existe"; exit 1; }
 
-# Preflight: o .env é consumido pelo compose (parser tolerante) E por este script
-# (source em bash). Valor sem aspas contendo espaço/$/` quebra o source com erro
-# críptico (achado do ensaio: ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g executava
-# "-Xmx6g" como comando). Detectar ANTES de sourcear e falhar com a lista.
+# Preflight (whitelist): este script faz `source` no .env, então o bash INTERPRETA
+# cada valor — não é só parsing. Um `;` executa o resto da linha durante o source
+# (injeção de comando); `|`, `&`, `<`, `>`, `(`, `)`, aspas no meio do valor ou aspas
+# não-terminadas quebram ou executam o parse. O compose é tolerante e não pega nada
+# disso (achado do ensaio: ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g rodava "-Xmx6g" como
+# comando). Uma blacklist de espaço/$/backtick não cobre esse leque, então validamos
+# por WHITELIST, por linha KEY=VALUE (após remover um comentário " #..." à direita):
+#   valor vazio            → ok
+#   valor começando com "  → tem de casar ^"[^"]*"$ (aspas duplas fechadas), senão flag
+#   valor começando com '  → tem de casar ^'[^']*'$ (aspas simples fechadas), senão flag
+#   valor sem aspas        → só o charset seguro [A-Za-z0-9_.,:/@+?%=-]; o resto exige aspas
+# Falha ANTES de sourcear, listando só nº da linha + KEY (nunca o VALOR).
 unsafe=$(awk 'match($0, /^[A-Za-z_][A-Za-z0-9_]*=/) {
-    v = substr($0, RLENGTH + 1)
+    key = substr($0, 1, RLENGTH - 1)
+    v   = substr($0, RLENGTH + 1)
     sub(/[[:space:]]+#.*$/, "", v)
-    if (v ~ /^["'\'']/) next
-    if (v ~ /[[:space:]$`]/) print NR ": " substr($0, 1, RLENGTH - 1) "=..."
+    if (v == "") next
+    q = substr(v, 1, 1)
+    if (q == "\"") { if (v ~ /^"[^"]*"$/) next }
+    else if (q == "'\''") { if (v ~ /^'\''[^'\'']*'\''$/) next }
+    else { if (v ~ /^[A-Za-z0-9_.,:\/@+?%=-]+$/) next }
+    print NR ": " key "=..."
   }' "$ENV_FILE")
 if [ -n "$unsafe" ]; then
-  log "ERRO: linhas do ${ENV_FILE} inseguras para source em bash — adicione aspas duplas no valor:"
+  log "ERRO: linhas do ${ENV_FILE} inseguras para source em bash — use aspas (\" ou ') no valor ou remova caracteres fora do charset seguro:"
   echo "$unsafe"
   exit 1
 fi
@@ -442,6 +455,13 @@ for v in ZAMMAD_RAILSSERVER_RESOURCES_LIMITS_MEMORY ZAMMAD_NGINX_RESOURCES_LIMIT
 done
 if [ "${#missing[@]}" -gt 0 ]; then
   log "ERRO: variáveis obrigatórias ausentes no ${ENV_FILE}: ${missing[*]}"
+  exit 1
+fi
+
+# Preflight: sem token, o tunnel sobe vazio e crash-loopa — e o wait_converged
+# não o observa (só serviços de app); só o smoke pegaria, tarde demais.
+if [ "${CLOUDFLARE_TUNNEL_REPLICAS:-1}" != "0" ] && [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
+  log "ERRO: CLOUDFLARE_TUNNEL_TOKEN ausente no ${ENV_FILE} (e CLOUDFLARE_TUNNEL_REPLICAS != 0)"
   exit 1
 fi
 
@@ -734,10 +754,12 @@ Pré-requisitos:
   os arquivos antes do cutover, o run ficará VERMELHO no passo Deploy (o `ensure_network` falha sem Swarm) mas os
   arquivos já terão sido copiados — inofensivo.
 - Backup do dia existente no volume `zammad_zammad-backup` (e no S3).
-- Comparar os limites de memória dos containers atuais
-  (`docker inspect --format '{{.Name}} {{.HostConfig.Memory}}' $(docker ps -q)`) com o render do stack
+- Comparar os limites de memória e CPU dos containers atuais
+  (`docker inspect --format '{{.Name}} cpus={{.HostConfig.NanoCpus}} mem={{.HostConfig.Memory}}' $(docker ps -q)`) com o render do stack
   (`RELEASE_TAG=<tag> bash -c 'set -a; source /opt/zammad/.env; set +a; docker stack config -c /opt/ndesk/deploy/stack.yml' | grep -A3 limits`)
-  — divergência = ajustar o `.env` antes do cutover.
+  — divergência = ajustar o `.env` antes do cutover. Verificado em 2026-07-24 que prod já roda `cpus=1.0`
+  (NanoCpus 1000000000) em todos os serviços via scenario de limits e não há vars `_CPUS` no `.env` — os defaults
+  do stack.yml são paridade exata; a comparação existe para detectar drift até o dia do cutover.
 - Hoje o compose já publica a 8080 em `0.0.0.0` (verificado em 2026-07-23); o ingress do Swarm mantém o mesmo
   comportamento — sem mudança de exposição. O acesso oficial continua sendo via Cloudflare Tunnel.
 - Conferir que `/opt/zammad/.env` é seguro para `source` em bash (sem valores com espaços/`$`/backticks sem aspas)
@@ -745,6 +767,12 @@ Pré-requisitos:
   `deploy.sh` detecta e falha listando as linhas inseguras, mas conserte ANTES do cutover para não
   gastar janela: hoje a linha `ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g` de prod precisa ganhar aspas
   duplas no valor (achado do ensaio de 2026-07-24; aspas são compatíveis com o compose).
+- Conferir que a versão do cloudflared rodando hoje (`docker exec zammad-cloudflare-tunnel-1 cloudflared --version`)
+  bate com o pin do `stack.yml` (`cloudflare/cloudflared:2026.7.2`, conferido em 2026-07-24) — o tunnel é o único
+  componente que o ensaio não exercitou (rodou com replicas=0 para proteger o tráfego real); divergência =
+  atualizar o pin antes da janela.
+- `docker pull technewbyte/ndesk:<TAG>` antes da janela (aquece o cache de imagem; a projeção de ~5 min de janela
+  assume pull quente).
 
 ## Passos
 
@@ -842,7 +870,7 @@ Copiar de prod para a VM, mesma árvore:
 ## 4. Ensaiar o cutover
 
 Executar `cutover.md` passos 1–6 na VM (a TAG é a do VERSION restaurado; smoke em
-`http://localhost:8080/`; ignorar o passo do tunnel/FQDN público).
+`http://127.0.0.1:8080/`; ignorar o passo do tunnel/FQDN público).
 
 ## 5. Ensaiar o deploy quente (o teste que importa)
 
@@ -916,6 +944,22 @@ docker exec "$CID" bundle exec rake zammad:searchindex:rebuild
 2. Semear `restore/` no volume de backup (ver rehearsal.md §3).
 3. `docker service scale ndesk_zammad-backup=1` → acompanhar logs até "Restore completed".
 4. Redeployar a tag desejada: `bash /opt/ndesk/deploy/deploy.sh <tag> --skip-migrate`
+5. Rodar o **Rebuild do índice de busca** (seção acima) — o restore rebobina DB+storage
+   mas NÃO o volume do Elasticsearch; sem reindex a busca fica dessincronizada.
+
+## Migração falhou durante Janela de manutenção
+
+O app está deliberadamente a 0 réplicas quando a migração roda; se ela falha, o
+script morre e o app CONTINUA parado (a janela segue aberta). Opções:
+
+1. Corrigir a causa e re-disparar o mesmo workflow dispatch — todas as fases são
+   idempotentes.
+2. Reabrir já na versão anterior: `bash /opt/ndesk/deploy/deploy.sh <tag-anterior> --skip-migrate`.
+
+Atenção: cada migração Rails commita individualmente — um lote pode ter ficado
+parcialmente aplicado. Migrações aditivas convivem com o código antigo, mas se a
+migração que falhou era destrutiva, avaliar o Restore (seção anterior) antes de
+reabrir.
 ```
 
 - [ ] **Step 4: Conferir consistência de nomes contra os Tasks 1–2**

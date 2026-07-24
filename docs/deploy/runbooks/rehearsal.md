@@ -56,7 +56,7 @@ Copiar de prod para a VM, mesma árvore:
 ## 4. Ensaiar o cutover
 
 Executar `cutover.md` passos 1–6 na VM (a TAG é a do VERSION restaurado; smoke em
-`http://localhost:8080/`; ignorar o passo do tunnel/FQDN público).
+`http://127.0.0.1:8080/`; ignorar o passo do tunnel/FQDN público).
 
 ## 5. Ensaiar o deploy quente (o teste que importa)
 

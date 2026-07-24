@@ -9,13 +9,17 @@ Pré-requisitos:
   os arquivos antes do cutover, o run ficará VERMELHO no passo Deploy (o `ensure_network` falha sem Swarm) mas os
   arquivos já terão sido copiados — inofensivo.
 - Backup do dia existente no volume `zammad_zammad-backup` (e no S3).
-- Comparar os limites de memória dos containers atuais com o render do stack — divergência = ajustar o `.env`
-  antes do cutover (o `deploy.sh` também falha no preflight se as variáveis de limite faltarem no `.env`):
+- Comparar os limites de memória e CPU dos containers atuais com o render do stack — divergência = ajustar o `.env`
+  antes do cutover (o `deploy.sh` também falha no preflight se as variáveis de limite de memória faltarem no `.env`):
 
   ```bash
-  docker inspect --format '{{.Name}} {{.HostConfig.Memory}}' $(docker ps -q)
+  docker inspect --format '{{.Name}} cpus={{.HostConfig.NanoCpus}} mem={{.HostConfig.Memory}}' $(docker ps -q)
   RELEASE_TAG=<tag> bash -c 'set -a; source /opt/zammad/.env; set +a; docker stack config -c /opt/ndesk/deploy/stack.yml' | grep -A3 limits
   ```
+
+  Verificado em 2026-07-24 que prod já roda `cpus=1.0` (NanoCpus 1000000000) em todos os serviços via scenario de
+  limits e não há vars `_CPUS` no `.env` — os defaults do stack.yml são paridade exata; a comparação existe para
+  detectar drift até o dia do cutover.
 
 - Hoje o compose já publica a 8080 em `0.0.0.0` (verificado em 2026-07-23); o ingress do Swarm mantém o mesmo
   comportamento — sem mudança de exposição. O acesso oficial continua sendo via Cloudflare Tunnel.
@@ -24,6 +28,12 @@ Pré-requisitos:
   `deploy.sh` detecta e falha listando as linhas inseguras, mas conserte ANTES do cutover para não
   gastar janela: hoje a linha `ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g` de prod precisa ganhar aspas
   duplas no valor (achado do ensaio de 2026-07-24; aspas são compatíveis com o compose).
+- Conferir que a versão do cloudflared rodando hoje (`docker exec zammad-cloudflare-tunnel-1 cloudflared --version`)
+  bate com o pin do `stack.yml` (`cloudflare/cloudflared:2026.7.2`, conferido em 2026-07-24) — o tunnel é o único
+  componente que o ensaio não exercitou (rodou com replicas=0 para proteger o tráfego real); divergência =
+  atualizar o pin antes da janela.
+- `docker pull technewbyte/ndesk:<TAG>` antes da janela (aquece o cache de imagem; a projeção de ~5 min de janela
+  assume pull quente).
 
 ## Passos
 

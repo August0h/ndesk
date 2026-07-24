@@ -21,18 +21,31 @@ log() { echo "[deploy $(date -u +%H:%M:%S)] $*"; }
 
 [ -f "$ENV_FILE" ] || { log "ERRO: ${ENV_FILE} não existe"; exit 1; }
 
-# Preflight: o .env é consumido pelo compose (parser tolerante) E por este script
-# (source em bash). Valor sem aspas contendo espaço/$/` quebra o source com erro
-# críptico (achado do ensaio: ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g executava
-# "-Xmx6g" como comando). Detectar ANTES de sourcear e falhar com a lista.
+# Preflight (whitelist): este script faz `source` no .env, então o bash INTERPRETA
+# cada valor — não é só parsing. Um `;` executa o resto da linha durante o source
+# (injeção de comando); `|`, `&`, `<`, `>`, `(`, `)`, aspas no meio do valor ou aspas
+# não-terminadas quebram ou executam o parse. O compose é tolerante e não pega nada
+# disso (achado do ensaio: ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g rodava "-Xmx6g" como
+# comando). Uma blacklist de espaço/$/backtick não cobre esse leque, então validamos
+# por WHITELIST, por linha KEY=VALUE (após remover um comentário " #..." à direita):
+#   valor vazio            → ok
+#   valor começando com "  → tem de casar ^"[^"]*"$ (aspas duplas fechadas), senão flag
+#   valor começando com '  → tem de casar ^'[^']*'$ (aspas simples fechadas), senão flag
+#   valor sem aspas        → só o charset seguro [A-Za-z0-9_.,:/@+?%=-]; o resto exige aspas
+# Falha ANTES de sourcear, listando só nº da linha + KEY (nunca o VALOR).
 unsafe=$(awk 'match($0, /^[A-Za-z_][A-Za-z0-9_]*=/) {
-    v = substr($0, RLENGTH + 1)
+    key = substr($0, 1, RLENGTH - 1)
+    v   = substr($0, RLENGTH + 1)
     sub(/[[:space:]]+#.*$/, "", v)
-    if (v ~ /^["'\'']/) next
-    if (v ~ /[[:space:]$`]/) print NR ": " substr($0, 1, RLENGTH - 1) "=..."
+    if (v == "") next
+    q = substr(v, 1, 1)
+    if (q == "\"") { if (v ~ /^"[^"]*"$/) next }
+    else if (q == "'\''") { if (v ~ /^'\''[^'\'']*'\''$/) next }
+    else { if (v ~ /^[A-Za-z0-9_.,:\/@+?%=-]+$/) next }
+    print NR ": " key "=..."
   }' "$ENV_FILE")
 if [ -n "$unsafe" ]; then
-  log "ERRO: linhas do ${ENV_FILE} inseguras para source em bash — adicione aspas duplas no valor:"
+  log "ERRO: linhas do ${ENV_FILE} inseguras para source em bash — use aspas (\" ou ') no valor ou remova caracteres fora do charset seguro:"
   echo "$unsafe"
   exit 1
 fi
@@ -63,6 +76,13 @@ for v in ZAMMAD_RAILSSERVER_RESOURCES_LIMITS_MEMORY ZAMMAD_NGINX_RESOURCES_LIMIT
 done
 if [ "${#missing[@]}" -gt 0 ]; then
   log "ERRO: variáveis obrigatórias ausentes no ${ENV_FILE}: ${missing[*]}"
+  exit 1
+fi
+
+# Preflight: sem token, o tunnel sobe vazio e crash-loopa — e o wait_converged
+# não o observa (só serviços de app); só o smoke pegaria, tarde demais.
+if [ "${CLOUDFLARE_TUNNEL_REPLICAS:-1}" != "0" ] && [ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
+  log "ERRO: CLOUDFLARE_TUNNEL_TOKEN ausente no ${ENV_FILE} (e CLOUDFLARE_TUNNEL_REPLICAS != 0)"
   exit 1
 fi
 
