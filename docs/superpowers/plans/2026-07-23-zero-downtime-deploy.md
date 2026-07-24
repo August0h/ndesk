@@ -815,7 +815,9 @@ Copiar de prod para a VM, mesma árvore:
 **Ajustes OBRIGATÓRIOS no `.env` da VM:**
 - `CLOUDFLARE_TUNNEL_REPLICAS=0` e `CLOUDFLARE_TUNNEL_TOKEN=dummy` — o token de
   produção NUNCA roda fora de prod (o tunnel roubaria tráfego real do helpdesk).
-- `SMOKE_URL=http://localhost:8080/` (não há tunnel na VM).
+- `SMOKE_URL=http://127.0.0.1:8080/` (não há tunnel na VM). Usar `127.0.0.1`, NÃO
+  `localhost`: o ingress do Swarm não atende `::1`, e `localhost` resolve IPv6
+  primeiro — o smoke penduraria até timeout (achado do ensaio).
 
 ## 3. Restore do backup de produção
 
