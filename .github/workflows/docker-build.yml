@@ -85,7 +85,7 @@ jobs:
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
-          if ! echo "$TAG" | grep -Eq '^nb\.[A-Za-z0-9._-]+$'; then
+          if ! [[ "$TAG" =~ ^nb\.[A-Za-z0-9._-]+$ ]]; then
             echo "Tag inválida: '$TAG' (esperado nb.<alfanumérico/./_/->)"; exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
