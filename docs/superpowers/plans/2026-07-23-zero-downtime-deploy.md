@@ -399,6 +399,23 @@ APP_SERVICES=(zammad-railsserver zammad-nginx zammad-websocket zammad-scheduler 
 log() { echo "[deploy $(date -u +%H:%M:%S)] $*"; }
 
 [ -f "$ENV_FILE" ] || { log "ERRO: ${ENV_FILE} não existe"; exit 1; }
+
+# Preflight: o .env é consumido pelo compose (parser tolerante) E por este script
+# (source em bash). Valor sem aspas contendo espaço/$/` quebra o source com erro
+# críptico (achado do ensaio: ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g executava
+# "-Xmx6g" como comando). Detectar ANTES de sourcear e falhar com a lista.
+unsafe=$(awk 'match($0, /^[A-Za-z_][A-Za-z0-9_]*=/) {
+    v = substr($0, RLENGTH + 1)
+    sub(/[[:space:]]+#.*$/, "", v)
+    if (v ~ /^["'\'']/) next
+    if (v ~ /[[:space:]$`]/) print NR ": " substr($0, 1, RLENGTH - 1) "=..."
+  }' "$ENV_FILE")
+if [ -n "$unsafe" ]; then
+  log "ERRO: linhas do ${ENV_FILE} inseguras para source em bash — adicione aspas duplas no valor:"
+  echo "$unsafe"
+  exit 1
+fi
+
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
@@ -724,7 +741,10 @@ Pré-requisitos:
 - Hoje o compose já publica a 8080 em `0.0.0.0` (verificado em 2026-07-23); o ingress do Swarm mantém o mesmo
   comportamento — sem mudança de exposição. O acesso oficial continua sendo via Cloudflare Tunnel.
 - Conferir que `/opt/zammad/.env` é seguro para `source` em bash (sem valores com espaços/`$`/backticks sem aspas)
-  — o `deploy.sh` faz `source` nele, e o parser do compose é mais tolerante que o bash.
+  — o `deploy.sh` faz `source` nele, e o parser do compose é mais tolerante que o bash. O próprio
+  `deploy.sh` detecta e falha listando as linhas inseguras, mas conserte ANTES do cutover para não
+  gastar janela: hoje a linha `ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g` de prod precisa ganhar aspas
+  duplas no valor (achado do ensaio de 2026-07-24; aspas são compatíveis com o compose).
 
 ## Passos
 

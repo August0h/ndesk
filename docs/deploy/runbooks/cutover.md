@@ -20,7 +20,10 @@ Pré-requisitos:
 - Hoje o compose já publica a 8080 em `0.0.0.0` (verificado em 2026-07-23); o ingress do Swarm mantém o mesmo
   comportamento — sem mudança de exposição. O acesso oficial continua sendo via Cloudflare Tunnel.
 - Conferir que `/opt/zammad/.env` é seguro para `source` em bash (sem valores com espaços/`$`/backticks sem aspas)
-  — o `deploy.sh` faz `source` nele, e o parser do compose é mais tolerante que o bash.
+  — o `deploy.sh` faz `source` nele, e o parser do compose é mais tolerante que o bash. O próprio
+  `deploy.sh` detecta e falha listando as linhas inseguras, mas conserte ANTES do cutover para não
+  gastar janela: hoje a linha `ELASTICSEARCH_JAVA_OPTS=-Xms6g -Xmx6g` de prod precisa ganhar aspas
+  duplas no valor (achado do ensaio de 2026-07-24; aspas são compatíveis com o compose).
 
 ## Passos
 
