@@ -39,9 +39,11 @@ Pré-requisitos:
 4. **Firewall:** confirmar de FORA do host que as portas de Swarm (2377/tcp,
    7946/tcp+udp, 4789/udp) estão bloqueadas e que a 8080 continua como hoje:
    `sudo nmap -sT -sU -p T:2377,T:7946,T:8080,U:7946,U:4789 5.161.125.64`
-   → `8080 open` (igual a hoje) e `closed|filtered` para as demais portas listadas
-   (o scan UDP exige root). Se alguma porta de Swarm estiver aberta, bloquear no
-   firewall Hetzner/ufw ANTES de seguir.
+   → `closed|filtered` para TODAS as portas listadas — inclusive a 8080, pois neste
+   momento o compose já caiu e nada escuta nela (o scan UDP exige root). Se alguma
+   porta de Swarm estiver aberta, bloquear no firewall Hetzner/ufw ANTES de seguir.
+   Após o passo 6, repetir só a 8080 (`nmap -sT -p 8080 5.161.125.64`) → `open`,
+   igual a hoje (paridade de exposição, ver pré-requisitos).
 5. **Subir o stack** (mesma tag, sem migração — a janela acaba quando convergir):
    `bash /opt/ndesk/deploy/deploy.sh "$TAG" --skip-migrate`
 6. **Verificar:**

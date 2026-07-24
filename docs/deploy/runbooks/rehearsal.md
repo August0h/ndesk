@@ -12,6 +12,10 @@ No host novo: `curl -fsSL https://get.docker.com | sh` (confere `docker --versio
 
 Copiar de prod para a VM, mesma árvore:
 
+- Antes de copiar, conferir que o `.env` de prod contém as 10 variáveis que o
+  preflight do `deploy.sh` exige (`ZAMMAD_*_RESOURCES_LIMITS_MEMORY` ×9 +
+  `ELASTICSEARCH_JAVA_OPTS`) — se faltar alguma, ajustar em PROD primeiro e então
+  copiar (senão o deploy falha no ensaio com a lista das faltantes).
 - `/opt/zammad/{docker-compose.yml,docker-compose.override.yml,scenarios,.env}`
 - `/opt/ndesk/deploy/` (ou rsync do checkout local: `rsync -av deploy/ root@<vm>:/opt/ndesk/deploy/`)
 
