@@ -36,9 +36,11 @@ jobs:
           fi
 
       - name: Stamp version with nb tag
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           base_version=$(cat VERSION | tr -d '[:space:]')
-          echo "${base_version}-${{ steps.tag.outputs.tag }}" > VERSION
+          echo "${base_version}-${IMAGE_TAG}" > VERSION
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -75,14 +77,16 @@ jobs:
 
       - name: Resolve release tag
         id: resolve
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
-          if ! echo "$TAG" | grep -Eq '^nb\.'; then
-            echo "Tag inválida: '$TAG' (esperado nb.*)"; exit 1
+          if ! echo "$TAG" | grep -Eq '^nb\.[A-Za-z0-9._-]+$'; then
+            echo "Tag inválida: '$TAG' (esperado nb.<alfanumérico/./_/->)"; exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
