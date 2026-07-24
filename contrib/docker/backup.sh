@@ -28,8 +28,11 @@ function zammad_backup {
   echo "${TIMESTAMP} - backing up zammad..."
 
   # delete old backups
-  if [ -d "${BACKUP_DIR}" ] && [ -n "$(ls "${BACKUP_DIR}")" ]; then
-    find "${BACKUP_DIR}"/*_zammad_*.gz -type f -mtime +"${HOLD_DAYS}" -delete
+  # No glob: com o diretório sem nenhum *.gz (estado pós-restore, que deixa só
+  # restore_completed_*), o glob não expandido fazia o find errar e, com errexit,
+  # derrubava o serviço em crash-loop.
+  if [ -d "${BACKUP_DIR}" ]; then
+    find "${BACKUP_DIR}" -maxdepth 1 -name '*_zammad_*.gz' -type f -mtime +"${HOLD_DAYS}" -delete
   fi
 
   if [ "${NO_FILE_BACKUP}" != "yes" ]; then

@@ -41,4 +41,7 @@ docker exec "$CID" bundle exec rake zammad:searchindex:rebuild
 
 2. Semear `restore/` no volume de backup (ver rehearsal.md §3).
 3. `docker service scale ndesk_zammad-backup=1` → acompanhar logs até "Restore completed".
+   Em seguida, limpar o resíduo do restore (senão, em imagens anteriores ao fix do
+   `backup.sh`, o serviço de backup crash-loopa no próximo start — achado do ensaio):
+   `docker run --rm -v zammad_zammad-backup:/b alpine sh -c 'rm -rf /b/restore_completed_*'`
 4. Redeployar a tag desejada: `bash /opt/ndesk/deploy/deploy.sh <tag> --skip-migrate`

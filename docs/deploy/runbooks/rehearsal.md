@@ -46,6 +46,10 @@ Copiar de prod para a VM, mesma árvore:
   `cd /opt/zammad && docker compose -f docker-compose.yml -f scenarios/apply-resource-limits.yml up -d`
   (sem o scenario do tunnel na VM). Acompanhar: `docker compose logs -f zammad-backup`
   até "Restore completed", depois esperar o app subir e responder em `:8080`.
+  Antes do cutover, limpar o resíduo do restore (em imagens anteriores ao fix do
+  `backup.sh`, o serviço de backup crash-loopa se o volume só tiver o diretório
+  `restore_completed_*` — achado do ensaio):
+  `docker run --rm -v zammad_zammad-backup:/b alpine sh -c 'rm -rf /b/restore_completed_*'`
 
 ## 4. Ensaiar o cutover
 
