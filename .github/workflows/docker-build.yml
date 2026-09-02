@@ -57,8 +57,9 @@ jobs:
       - name: Deploy to prod-ndesk
         uses: appleboy/ssh-action@v1
         with:
-          host: 5.161.125.64
-          username: root
+          host: ${{ secrets.NDESK_HOST }}
+          port: ${{ secrets.NDESK_SSH_PORT }}
+          username: deploy
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/zammad
