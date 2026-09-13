@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
+      image_digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -20,7 +21,14 @@ jobs:
         id: tag
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            tag="${GITHUB_REF#refs/tags/}"
+            # Closed format. A git refname may legally contain $ ; & | ' " and
+            # this value reaches a remote shell in the deploy job.
+            if [[ ! "$tag" =~ ^nb\.v[0-9]+(\.[0-9]+)*$ ]]; then
+              echo "refusing tag '$tag': expected nb.vN[.N...]" >&2
+              exit 1
+            fi
+            echo "tag=$tag" >> $GITHUB_OUTPUT
           else
             echo "tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
           fi
@@ -40,6 +48,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -53,22 +62,163 @@ jobs:
     runs-on: ubuntu-24.04
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+    # Stops two tags overlapping. It does NOT order them -- GitHub queues by
+    # arrival at the group, not by trigger time -- so the script also refuses to
+    # move the release backwards.
+    concurrency:
+      group: ndesk-deploy
+      cancel-in-progress: false
     steps:
+      # An absent secret renders as an empty string, and an empty `fingerprint`
+      # makes the action fall back to InsecureIgnoreHostKey -- it would accept
+      # any server answering at that address, with no error. Fail closed here
+      # instead of depending on someone remembering to create the secret.
+      - name: Require the host fingerprint
+        env:
+          FINGERPRINT: ${{ secrets.NDESK_SSH_FINGERPRINT }}
+        run: |
+          test -n "$FINGERPRINT" || {
+            echo "NDESK_SSH_FINGERPRINT is not set." >&2
+            echo "Refusing to deploy without host key verification." >&2
+            exit 1
+          }
+
       - name: Deploy to prod-ndesk
         uses: appleboy/ssh-action@v1
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.build.outputs.image_digest }}
         with:
           host: ${{ secrets.NDESK_HOST }}
           port: ${{ secrets.NDESK_SSH_PORT }}
           username: deploy
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Without this the action falls back to InsecureIgnoreHostKey: the job
+          # would authenticate to ANY server answering at that address, so a
+          # redirected connection could fabricate a green deploy.
+          #
+          # The full `SHA256:...` string, obtained out of band, for the key type
+          # the Go client actually negotiates -- which is RSA, not ED25519: Go's
+          # default host key algorithms put rsa-sha2-256/512 ahead of
+          # ssh-ed25519. Derive it with:
+          #   ssh-keyscan -t rsa -p <port> <host> | ssh-keygen -lf - | awk '{print $2}'
+          # If a deploy ever fails with a fingerprint mismatch, re-derive it the
+          # same way rather than guessing the key type.
+          fingerprint: ${{ secrets.NDESK_SSH_FINGERPRINT }}
+          # The bounded waits inside the script add up to 16m (flock 60s +
+          # docker wait 900s); this leaves real slack for two pulls and the
+          # recreate on top of them, instead of being exactly their sum.
+          command_timeout: 30m
+          # drone-ssh emits these as single-quoted, escaped `export` lines ahead
+          # of the script, so the values never splice into the script body.
+          envs: IMAGE_TAG,IMAGE_DIGEST
           script: |
+            # appleboy/ssh-action@v1 dropped script_stop, so without this a
+            # failing pull or up -d still reports a green job.
+            set -Eeuo pipefail
             cd /opt/zammad
-            docker compose -f docker-compose.yml \
-              -f scenarios/add-cloudflare-tunnel.yml \
-              -f scenarios/apply-resource-limits.yml \
-              pull
-            docker compose -f docker-compose.yml \
-              -f scenarios/add-cloudflare-tunnel.yml \
-              -f scenarios/apply-resource-limits.yml \
-              up -d
-            echo "Deployed tag: ${{ needs.build.outputs.image_tag }}"
+
+            IMAGE_NAME=technewbyte/ndesk
+            expr "$IMAGE_TAG" : 'nb\.v[0-9][0-9.]*$' >/dev/null \
+              || { echo "refusing tag: $IMAGE_TAG" >&2; exit 1; }
+            expr "$IMAGE_DIGEST" : 'sha256:[0-9a-f]\{64\}$' >/dev/null \
+              || { echo "bad digest: $IMAGE_DIGEST" >&2; exit 1; }
+            REF="${IMAGE_TAG}@${IMAGE_DIGEST}"
+
+            # A function, not a string: an unquoted "$COMPOSE" would rely on
+            # word splitting, which shellcheck flags and which breaks the moment
+            # a path gains a space.
+            compose() {
+              docker compose --env-file .env --env-file .env.release \
+                -f docker-compose.yml \
+                -f scenarios/add-cloudflare-tunnel.yml \
+                -f scenarios/apply-resource-limits.yml "$@"
+            }
+
+            # In /opt/zammad, not /tmp: world-writable /tmp lets any local user
+            # pre-create the file and lock deploys out for good. 60s, not longer:
+            # the concurrency group already serialises this job against itself.
+            exec 9>.deploy.lock
+            flock -w 60 9
+
+            # Two tags pushed close together are serialised but NOT ordered --
+            # the later build can finish first, and the older one would then
+            # deploy over it. Refuse to go backwards; a deliberate rollback goes
+            # through the Ansible path with an explicit reference.
+            if [ -f .env.release ]; then
+              cur="$(sed -n 's/^VERSION=\(nb\.v[0-9.]*\)@.*/\1/p' .env.release)"
+              if [ -z "$cur" ]; then
+                echo "no comparable tag in .env.release; order check SKIPPED"
+              elif [ "$cur" != "$IMAGE_TAG" ]; then
+                newest="$(printf '%s\n%s\n' "$cur" "$IMAGE_TAG" | sort -V | tail -1)"
+                [ "$newest" = "$IMAGE_TAG" ] || {
+                  echo "refusing to move the release back: $cur is newer than $IMAGE_TAG" >&2
+                  exit 1
+                }
+              fi
+            fi
+
+            # Pull BEFORE writing anything. A pull that fails after the write
+            # would leave the file naming a release the host cannot run.
+            docker pull "${IMAGE_NAME}:${REF}"
+
+            # The release identity lives in a file this pipeline OWNS. .env is
+            # rendered by the infra repo -- it holds secrets and the sidecar
+            # pins -- and is never edited from here. Compose merges both env
+            # files, last one wins, so these two keys override what .env says.
+            umask 022
+            printf 'IMAGE_REPO=%s\nVERSION=%s\n' "$IMAGE_NAME" "$REF" > .env.release.tmp
+            mv .env.release.tmp .env.release
+
+            compose pull
+            compose up -d
+
+            # NOT `up --wait`. Compose treats a service with no healthcheck as
+            # ready the moment it is Running, and zammad-init is designed to EXIT
+            # after applying the migrations -- so --wait would return green while
+            # they were still running, and never read the exit code. Nothing in
+            # this stack uses service_completed_successfully either, so this wait
+            # is the ONLY gate on the migrations.
+            #
+            # Selected by DIGEST, not by `head -1`: compose documents no ordering
+            # for `ps -q`, and an interrupted earlier run can leave a stale init
+            # container carrying the same service labels. Waiting on that one
+            # returns its old exit code instantly and the gate becomes decorative.
+            initcid=""
+            for c in $(compose ps -aq zammad-init); do
+              img="$(docker inspect --format '{{.Config.Image}}' "$c" 2>/dev/null || true)"
+              case "$img" in
+                *"$IMAGE_DIGEST"*) initcid="$c"; break ;;
+              esac
+            done
+            [ -n "$initcid" ] || {
+              echo "no zammad-init container running ${REF}" >&2; exit 1
+            }
+
+            # `|| true` so a timeout (exit 124, empty output) falls into the
+            # error branch below instead of aborting mute under `set -e`.
+            initrc="$(timeout 900 docker wait "$initcid" || true)"
+            if [ "$initrc" != "0" ]; then
+              echo "zammad-init did not finish cleanly (rc=${initrc:-timeout});" \
+                   "database migrations did NOT complete" >&2
+              docker logs --tail 60 "$initcid" >&2 || true
+              exit 1
+            fi
+
+            # Prove the containers moved. `up -d` returning 0 is not proof: on
+            # 2026-09-10 this job reported success for a release that never
+            # shipped, because the pinned reference on disk never changed.
+            cid="$(compose ps -q zammad-railsserver | head -1)"
+            [ -n "$cid" ] || { echo "zammad-railsserver is not running" >&2; exit 1; }
+            got="$(docker inspect --format '{{.Config.Image}}' "$cid")"
+            state="$(docker inspect --format '{{.State.Status}}' "$cid")"
+            case "$got" in
+              *"$IMAGE_DIGEST"*) ;;
+              *) echo "expected $REF, container runs $got" >&2; exit 1 ;;
+            esac
+            [ "$state" = "running" ] || {
+              echo "zammad-railsserver is on the right image but ${state}" >&2; exit 1
+            }
+            echo "deployed: $got"
