@@ -173,6 +173,30 @@ jobs:
             mv .env.release.tmp .env.release
 
             compose pull
+
+            # Parar o tier de app ANTES de migrar. Um `up -d` puro recria tudo de
+            # uma vez, e por alguns segundos o codigo velho fica rodando contra um
+            # schema ja migrado. Deploy sem downtime depende de as migrations
+            # serem compativeis para tras, e ninguem verificou que as do Zammad
+            # sao -- entao a janela e alargada em vez de a gente apostar nisso.
+            #
+            # Os servicos de dados ficam de pe (o init precisa do banco) e o
+            # tunel tambem: para-lo troca um 502 atras do Cloudflare por um 530
+            # "origin unreachable", que e pior pelo mesmo trabalho.
+            #
+            # Fora do 06:00-07:00 UTC: parar o zammad-backup no meio trunca um
+            # dump.
+            running_before="$(compose ps --services --status running | tr '\n' ' ')"
+            to_stop=""
+            for svc in $running_before; do
+              case "$svc" in
+                zammad-postgresql|zammad-elasticsearch|zammad-redis|zammad-memcached|cloudflare-tunnel) ;;
+                *) to_stop="$to_stop $svc" ;;
+              esac
+            done
+            # shellcheck disable=SC2086
+            [ -z "$to_stop" ] || compose stop $to_stop
+
             compose up -d
 
             # NOT `up --wait`. Compose treats a service with no healthcheck as
