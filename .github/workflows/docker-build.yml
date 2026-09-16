@@ -67,6 +67,13 @@ jobs:
     # Stops two tags overlapping. It does NOT order them -- GitHub queues by
     # arrival at the group, not by trigger time -- so the script also refuses to
     # move the release backwards.
+    #
+    # Known limit: only ONE job stays pending, and a newly queued one CANCELS
+    # the pending predecessor. With three tags in flight the newest can be the
+    # one cancelled -- a grey job, not a red one -- and an older tag then lands
+    # and is accepted, because it is still newer than what is deployed. Nothing
+    # here notices. A cancelled deploy therefore means "re-run the newest tag",
+    # and until the queue preserves every pending job that is a manual step.
     concurrency:
       group: ndesk-deploy
       cancel-in-progress: false
@@ -107,9 +114,11 @@ jobs:
           # If a deploy ever fails with a fingerprint mismatch, re-derive it the
           # same way rather than guessing the key type.
           fingerprint: ${{ secrets.NDESK_SSH_FINGERPRINT }}
-          # The bounded waits inside the script add up to 16m (flock 60s +
-          # docker wait 900s); this leaves real slack for two pulls and the
-          # recreate on top of them, instead of being exactly their sum.
+          # The only bounded wait inside the script is the 60s flock. The
+          # migrations are deliberately NOT wrapped in `timeout` (killing the
+          # compose client mid-migration would orphan it), so THIS is what
+          # bounds them -- plus two pulls, the stop and the recreate. A hung
+          # migration ends here, red, with the app tier still down.
           command_timeout: 30m
           # drone-ssh emits these as single-quoted, escaped `export` lines ahead
           # of the script, so the values never splice into the script body.
@@ -127,14 +136,24 @@ jobs:
               || { echo "bad digest: $IMAGE_DIGEST" >&2; exit 1; }
             REF="${IMAGE_TAG}@${IMAGE_DIGEST}"
 
-            # A function, not a string: an unquoted "$COMPOSE" would rely on
-            # word splitting, which shellcheck flags and which breaks the moment
-            # a path gains a space.
+            # Functions, not strings: an unquoted "$COMPOSE" would rely on word
+            # splitting, which shellcheck flags and which breaks the moment a path
+            # gains a space. The -f list is shared, and is the SAME list the infra
+            # playbooks use -- a mismatch would mean the two disagree about what the
+            # stack is.
+            COMPOSE_FILES=(-f docker-compose.yml
+                           -f scenarios/add-cloudflare-tunnel.yml
+                           -f scenarios/apply-resource-limits.yml)
             compose() {
               docker compose --env-file .env --env-file .env.release \
-                -f docker-compose.yml \
-                -f scenarios/add-cloudflare-tunnel.yml \
-                -f scenarios/apply-resource-limits.yml "$@"
+                "${COMPOSE_FILES[@]}" "$@"
+            }
+            # Same, minus .env.release. Used ONLY by the read-only gates below, which
+            # run BEFORE that file is written -- on a freshly rebuilt host it may not
+            # exist yet, and --env-file on a missing file is an error. Container state
+            # and the database credentials do not depend on it.
+            compose_pre() {
+              docker compose --env-file .env "${COMPOSE_FILES[@]}" "$@"
             }
 
             # In /opt/zammad, not /tmp: world-writable /tmp lets any local user
@@ -150,7 +169,14 @@ jobs:
             if [ -f .env.release ]; then
               cur="$(sed -n 's/^VERSION=\(nb\.v[0-9.]*\)@.*/\1/p' .env.release)"
               if [ -z "$cur" ]; then
-                echo "no comparable tag in .env.release; order check SKIPPED"
+                # The infra repo's SEED names the image by bare digest, with no
+                # nb.vN in it (the infra repo records a digest). So after a DR
+                # rebuild there is nothing to compare against and re-running an
+                # OLD tag's job would be accepted. Deliberate, and the reason
+                # the guard is described as "refuses a release older than the
+                # deployed one" only once a CD release has written this file.
+                echo "no comparable tag in .env.release (seeded file?);" \
+                     "order check SKIPPED"
               elif [ "$cur" != "$IMAGE_TAG" ]; then
                 newest="$(printf '%s\n%s\n' "$cur" "$IMAGE_TAG" | sort -V | tail -1)"
                 [ "$newest" = "$IMAGE_TAG" ] || {
@@ -159,6 +185,47 @@ jobs:
                 }
               fi
             fi
+
+            # ------------------------------------------------------------------
+            # Portoes, TODOS antes de qualquer escrita. Uma recusa daqui para
+            # cima nao move nada: nem o .env.release, nem um container.
+            # ------------------------------------------------------------------
+            running_before="$(compose_pre ps --services --status running | tr '\n' ' ')"
+
+            # Pre-flight. O `run --no-deps` abaixo nao sobe dependencia: com o banco
+            # fora, o init falharia DEPOIS de o tier de app estar parado, virando
+            # uma recusa em outage. Host frio e o caminho de reconstrucao da
+            # infraestrutura, nao este job.
+            for req in zammad-railsserver zammad-postgresql; do
+              case " $running_before " in
+                *" $req "*) ;;
+                *) echo "$req is not running: refusing to deploy, nothing moved." >&2
+                   echo "A cold host is the infra rebuild path's job, not this one." >&2
+                   exit 1 ;;
+              esac
+            done
+
+            # zammad-init SEMEIA uma instalacao nova contra o banco que encontrar.
+            # Com o banco vazio, migrar seria substituir a producao por um helpdesk
+            # em branco. Mesmo portao do playbook, lido de dentro do container para
+            # nenhuma credencial passar por aqui.
+            # shellcheck disable=SC2016
+            # As variaveis expandem DENTRO do container, nao aqui -- as aspas
+            # simples sao o ponto.
+            tickets="$(compose_pre exec -T zammad-postgresql \
+              sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM tickets;"' \
+              2>/dev/null | tr -d '[:space:]' || true)"
+            case "$tickets" in
+              ''|*[!0-9]*)
+                echo "could not read a ticket count from the database;" >&2
+                echo "refusing to run migrations, nothing moved." >&2
+                exit 1 ;;
+            esac
+            [ "$tickets" -gt 0 ] || {
+              echo "the database reports 0 tickets: refusing to run zammad-init," >&2
+              echo "which would seed a blank install. Nothing moved." >&2
+              exit 1
+            }
 
             # Pull BEFORE writing anything. A pull that fails after the write
             # would leave the file naming a release the host cannot run.
@@ -174,19 +241,25 @@ jobs:
 
             compose pull
 
-            # Parar o tier de app ANTES de migrar. Um `up -d` puro recria tudo de
-            # uma vez, e por alguns segundos o codigo velho fica rodando contra um
-            # schema ja migrado. Deploy sem downtime depende de as migrations
-            # serem compativeis para tras, e ninguem verificou que as do Zammad
-            # sao -- entao a janela e alargada em vez de a gente apostar nisso.
+            # Migrar com o tier de app PARADO. Esta e a mesma sequencia que a
+            # infraestrutura usa nas rodadas dela, e a ordem importa nas DUAS
+            # direcoes: recriar antes de migrar deixa o codigo NOVO contra o schema
+            # ANTIGO pelo tempo das migrations; migrar antes de parar deixa o codigo
+            # ANTIGO contra o schema NOVO pelo tempo do recreate. Deploy sem
+            # downtime dependeria de as migrations serem compativeis para tras, e
+            # ninguem verificou que as do Zammad sao -- entao a janela e alargada de
+            # proposito em vez de a gente apostar nisso.
             #
-            # Os servicos de dados ficam de pe (o init precisa do banco) e o
-            # tunel tambem: para-lo troca um 502 atras do Cloudflare por um 530
-            # "origin unreachable", que e pior pelo mesmo trabalho.
+            # `up -d` NAO serve de portao: nada neste stack usa
+            # service_completed_successfully, entao ele sobe o railsserver em
+            # paralelo com o init.
             #
-            # Fora do 06:00-07:00 UTC: parar o zammad-backup no meio trunca um
-            # dump.
-            running_before="$(compose ps --services --status running | tr '\n' ' ')"
+            # Os servicos de dados ficam de pe (o init precisa do banco) e o tunel
+            # tambem: para-lo troca um 502 atras do Cloudflare por um 530 "origin
+            # unreachable", que e pior pelo mesmo trabalho.
+            #
+            # Evite a janela diaria de backup: parar o zammad-backup no meio trunca
+            # um dump. O horario esta no repo da frota.
             to_stop=""
             for svc in $running_before; do
               case "$svc" in
@@ -197,39 +270,43 @@ jobs:
             # shellcheck disable=SC2086
             [ -z "$to_stop" ] || compose stop $to_stop
 
-            compose up -d
-
-            # NOT `up --wait`. Compose treats a service with no healthcheck as
-            # ready the moment it is Running, and zammad-init is designed to EXIT
-            # after applying the migrations -- so --wait would return green while
-            # they were still running, and never read the exit code. Nothing in
-            # this stack uses service_completed_successfully either, so this wait
-            # is the ONLY gate on the migrations.
-            #
-            # Selected by DIGEST, not by `head -1`: compose documents no ordering
-            # for `ps -q`, and an interrupted earlier run can leave a stale init
-            # container carrying the same service labels. Waiting on that one
-            # returns its old exit code instantly and the gate becomes decorative.
-            initcid=""
-            for c in $(compose ps -aq zammad-init); do
-              img="$(docker inspect --format '{{.Config.Image}}' "$c" 2>/dev/null || true)"
-              case "$img" in
-                *"$IMAGE_DIGEST"*) initcid="$c"; break ;;
-              esac
-            done
-            [ -n "$initcid" ] || {
-              echo "no zammad-init container running ${REF}" >&2; exit 1
-            }
-
-            # `|| true` so a timeout (exit 124, empty output) falls into the
-            # error branch below instead of aborting mute under `set -e`.
-            initrc="$(timeout 900 docker wait "$initcid" || true)"
+            # `run --rm`, NAO `up -d`. Tres razoes, cada uma carregando peso:
+            #   * zammad-init carrega `restart: on-failure`. Sob `up -d`, um init que
+            #     falha reinicia para sempre e qualquer espera nele trava; `run`
+            #     trata o container como one-off, entao o exit code e real e chega
+            #     uma vez.
+            #   * --no-deps: `run` segue depends_on e o init depende do postgres.
+            #     Sem isso ele pode SUBIR o banco, furando o portao acima.
+            #   * -T: nao ha TTY neste transporte.
+            # Sem `timeout` em volta: matar o cliente do compose no meio deixaria a
+            # migration rodando sem ninguem lendo como ela terminou. O limite e o
+            # command_timeout do job, que falha vermelho.
+            initrc=0
+            compose run --rm --no-deps -T zammad-init || initrc=$?
             if [ "$initrc" != "0" ]; then
-              echo "zammad-init did not finish cleanly (rc=${initrc:-timeout});" \
-                   "database migrations did NOT complete" >&2
-              docker logs --tail 60 "$initcid" >&2 || true
+              echo "zammad-init exited ${initrc}: the migrations did NOT complete." >&2
+              echo "THE APP TIER IS STOPPED and the schema may be PARTIALLY migrated" >&2
+              echo "-- Rails commits one migration at a time, so this is not" >&2
+              echo "'nothing happened'. An exit of 137 is SIGKILL, usually the memory" >&2
+              echo "cap, and leaves the output empty; read dmesg -T on the host" >&2
+              echo "instead of reading anything into the silence." >&2
+              echo "TO RESTORE SERVICE, run this on the host:" >&2
+              echo "  cd /opt/zammad && docker compose --env-file .env" \
+                   "--env-file .env.release -f docker-compose.yml" \
+                   "-f scenarios/add-cloudflare-tunnel.yml" \
+                   "-f scenarios/apply-resource-limits.yml up -d${to_stop}" >&2
+              echo "That brings the app back on the NEW release, which .env.release" >&2
+              echo "already names, on a schema that is already partly forward." >&2
+              echo "Coming back on the OLD release is the Ansible path." >&2
               exit 1
             fi
+
+            # Recriar EXATAMENTE o que estava rodando, nomeado. Nunca um `up -d`
+            # pelado: ele subiria servico que estava parado de proposito -- o
+            # zammad-scheduler busca e-mail de cliente, e isso e destrutivo em
+            # qualquer lugar que nao seja a producao.
+            # shellcheck disable=SC2086
+            compose up -d $running_before
 
             # Prove the containers moved. `up -d` returning 0 is not proof: on
             # 2026-09-10 this job reported success for a release that never
