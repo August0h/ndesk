@@ -160,7 +160,13 @@ jobs:
             # pre-create the file and lock deploys out for good. 60s, not longer:
             # the concurrency group already serialises this job against itself.
             exec 9>.deploy.lock
-            flock -w 60 9
+            # Say so: a bare `flock` failure exits 1 with an empty log, and a
+            # red job with no line in it reads like an infrastructure glitch.
+            flock -w 60 9 || {
+              echo "another deploy holds /opt/zammad/.deploy.lock;" >&2
+              echo "waited 60s, gave up. Nothing moved." >&2
+              exit 1
+            }
 
             # Two tags pushed close together are serialised but NOT ordered --
             # the later build can finish first, and the older one would then
@@ -305,8 +311,13 @@ jobs:
             # pelado: ele subiria servico que estava parado de proposito -- o
             # zammad-scheduler busca e-mail de cliente, e isso e destrutivo em
             # qualquer lugar que nao seja a producao.
+            # --no-deps: naming a service still pulls in its depends_on chain,
+            # so a plain `up -d` would start memcached, redis or postgresql if
+            # one of them had been stopped on purpose. Every service named here
+            # was running a moment ago, and the ones that were never stopped are
+            # a no-op.
             # shellcheck disable=SC2086
-            compose up -d $running_before
+            compose up -d --no-deps $running_before
 
             # Prove the containers moved. `up -d` returning 0 is not proof: on
             # 2026-09-10 this job reported success for a release that never
@@ -322,4 +333,48 @@ jobs:
             [ "$state" = "running" ] || {
               echo "zammad-railsserver is on the right image but ${state}" >&2; exit 1
             }
-            echo "deployed: $got"
+
+            # The same assert the infra playbook makes, and for the same reason:
+            # this job must never leave a service running that was not running
+            # before it started. The scheduler is the expensive one -- Zammad
+            # fetches customer mail destructively, so a second poller consumes
+            # mail before production ever sees it.
+            set_of() { tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' '; }
+            running_after="$(compose ps --services --status running | tr '\n' ' ')"
+            before_set="$(printf '%s' "$running_before" | set_of)"
+            after_set="$(printf '%s' "$running_after" | set_of)"
+            [ "$before_set" = "$after_set" ] || {
+              echo "the running set changed." >&2
+              echo "  before: $before_set" >&2
+              echo "  after:  $after_set" >&2
+              echo "If zammad-scheduler is in 'after' and not in 'before', STOP" >&2
+              echo "IT NOW -- a second mail poller eats customer mail." >&2
+              exit 1
+            }
+
+            # `running` is not `serving`. A release that boots and then dies on
+            # its first request reports success from docker's point of view, so
+            # ask the app itself. Same endpoint the infra runbooks use; 8080 is
+            # the host-local nginx, closed to the world at DOCKER-USER.
+            #
+            # 3 minutes, not one: the only measured figure on this host is Rails
+            # answering 46s after a WARM restart (infra runbook, 2026-09-16
+            # reboot window). This path is colder -- migrations ran and every app
+            # container was recreated -- so a one-minute ceiling would fail a
+            # deploy that is merely still booting.
+            code=""
+            for _ in $(seq 18); do
+              code="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 10 \
+                http://127.0.0.1:8080/api/v1/getting_started || true)"
+              if [ "$code" = "200" ]; then break; fi
+              sleep 10
+            done
+            [ "$code" = "200" ] || {
+              echo "the app is on the new image but did not answer 200 within" >&2
+              echo "3min (last: ${code:-no response}). The release is DEPLOYED and" >&2
+              echo "the schema is migrated -- this is a failure to serve, not a" >&2
+              echo "failure to deploy. Read the railsserver log on the host." >&2
+              exit 1
+            }
+
+            echo "deployed: $got (HTTP 200)"
